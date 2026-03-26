@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devanta-postgres-local
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devanta}
+      POSTGRES_USER: ${POSTGRES_USER:-devanta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devanta}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devanta} -d ${POSTGRES_DB:-devanta}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - devanta-db-net
+
+volumes:
+  postgres_local_data:
+
+networks:
+  devanta-db-net:
+    name: devanta-db-net

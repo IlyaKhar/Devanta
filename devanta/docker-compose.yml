@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -23,6 +21,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: devanta-backend
+    ports:
+      - "8080:8080"
     env_file:
       - .env
     depends_on:
