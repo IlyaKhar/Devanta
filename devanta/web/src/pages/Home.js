@@ -1,0 +1,5 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { Link } from "react-router-dom";
+export function HomePage() {
+    return (_jsxs("main", { className: "mx-auto max-w-md space-y-4 p-4", children: [_jsx("h1", { className: "text-2xl font-bold text-brand-600", children: "Devanta" }), _jsx("p", { className: "text-slate-700", children: "\u0423\u0447\u0438\u0441\u044C \u0447\u0435\u0440\u0435\u0437 \u0438\u0433\u0440\u0443 \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u041C\u0430\u043A\u0441\u043E\u043C." }), _jsxs("div", { className: "grid gap-3", children: [_jsx(Link, { className: "rounded-xl bg-brand-500 p-4 text-center font-semibold text-white", to: "/dashboard", children: "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u043E\u0431\u0443\u0447\u0435\u043D\u0438\u0435" }), _jsx(Link, { className: "rounded-xl border p-4 text-center", to: "/reviews", children: "\u041E\u0442\u0437\u044B\u0432\u044B" }), _jsx(Link, { className: "rounded-xl border p-4 text-center", to: "/leaderboard", children: "\u041B\u0438\u0434\u0435\u0440\u0431\u043E\u0440\u0434" })] })] }));
+}
