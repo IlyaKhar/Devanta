@@ -1,7 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+# Важно: для сборки нужен typescript (devDependency), поэтому ставим dev deps.
+RUN npm ci
 COPY . .
 RUN npm run build
 

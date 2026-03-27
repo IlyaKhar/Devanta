@@ -43,17 +43,18 @@ services:
     networks:
       - devanta-net
 
-  bot:
+  support-bot:
     build:
-      context: ./bot
+      context: ./support-bot
       dockerfile: Dockerfile
-    container_name: devanta-bot
+    container_name: devanta-support-bot
+    ports:
+      - "8090:8090"
     env_file:
       - .env
-    environment:
-      BACKEND_PUBLIC_URL: http://backend:8080
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
     networks:
       - devanta-net
 
