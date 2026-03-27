@@ -1,0 +1,71 @@
+############################
+# Secrets / local env files #
+############################
+.env
+.env.*
+!.env.example
+
+############
+# Go (all) #
+############
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+coverage.*
+coverprofile
+
+# Go workspace / tooling
+go.work
+go.work.sum
+
+# IDE/editor
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+#########################
+# Backend build artifacts #
+#########################
+backend/tmp/
+backend/uploads/
+backend/*.log
+backend/**/.air.toml
+
+################
+# Web (Node)   #
+################
+web/node_modules/
+web/dist/
+web/build/
+web/.vite/
+web/.cache/
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/pnpm-debug.log*
+
+################
+# Mobile (RN?) #
+################
+mobile/node_modules/
+mobile/dist/
+mobile/build/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/.turbo/
+mobile/npm-debug.log*
+mobile/yarn-debug.log*
+mobile/yarn-error.log*
+mobile/pnpm-debug.log*
+
+############
+# Docker   #
+############
+**/.docker/
