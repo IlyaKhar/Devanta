@@ -12,8 +12,6 @@ Devanta — образовательная платформа для детей 
   /bot
   /docker
   docker-compose.yml
-  docker-compose.postgres.yml
-  docker-compose.app.yml
   .env.example
   Makefile
   README.md
@@ -27,25 +25,19 @@ Devanta — образовательная платформа для детей 
 cp .env.example .env
 ```
 
-2. Поднять сервисы:
+2. Поднять весь стенд одной командой:
 
 ```bash
-docker compose up -d --build
+make start
 ```
 
-3. Применить миграции:
-
-```bash
-docker compose exec backend migrate up
-```
-
-4. Проверить health:
+3. Проверить health:
 
 ```bash
 curl http://localhost/health
 ```
 
-Ожидаемый ответ:
+Ожидаемый ответ health:
 
 ```json
 {"status":"ok"}
@@ -61,84 +53,22 @@ curl http://localhost/health
 
 ## Make команды
 
-- `make up` — запустить окружение
+- `make start` — запустить весь проект и применить миграции
+- `make up` — запустить окружение без миграций
 - `make down` — остановить окружение
 - `make logs` — логи
 - `make migrate-up` — миграции вверх
 - `make migrate-down` — миграции вниз
-- `make pg-up` — поднять отдельный локальный Postgres
-- `make pg-down` — остановить отдельный локальный Postgres
-- `make pg-logs` — логи отдельного локального Postgres
-- `make pg-shell` — открыть psql в отдельном локальном Postgres
-- `make app-up` — поднять приложение без встроенного Postgres
-- `make app-down` — остановить приложение без встроенного Postgres
-- `make app-logs` — логи приложения без встроенного Postgres
-- `make migrate-pg-local` — применить миграции в отдельный локальный Postgres
-- `make dev-up` — поднять весь локальный стенд одной командой
-- `make dev-down` — остановить весь локальный стенд одной командой
-- `make dev-logs` — смотреть логи БД и приложения
-- `make dev-reset` — полный сброс локального стенда с удалением данных БД и чистым стартом
+- `make reset` — полный сброс с удалением данных БД и чистым стартом
+- `make pg-shell` — открыть psql в Postgres контейнере
 
-## Отдельный локальный Postgres (только БД)
+## Подключение к локальной БД
 
-Если нужно запускать только БД отдельно от всего проекта:
-
-```bash
-make pg-up
-```
-
-Подключение из локальных инструментов:
 - host: `localhost`
 - port: `5432`
 - db: `devanta`
 - user: `devanta`
 - password: `devanta`
-
-Остановить:
-
-```bash
-make pg-down
-```
-
-## Раздельный запуск: Postgres отдельно, приложение отдельно
-
-1. Поднять отдельный Postgres:
-
-```bash
-make pg-up
-```
-
-2. Применить миграции в этот Postgres:
-
-```bash
-make migrate-pg-local
-```
-
-3. Поднять приложение (backend/web/bot/nginx) без Postgres:
-
-```bash
-make app-up
-```
-
-## One command режим
-
-Запуск всего локального стенда:
-
-```bash
-make dev-up
-```
-
-Остановка:
-
-```bash
-make dev-down
-```
-
-Полный сброс (удалит данные в локальной БД) и чистый запуск:
-
-```bash
-make dev-reset
-```
 
 ## API (основные)
 

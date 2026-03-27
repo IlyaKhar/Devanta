@@ -10,6 +10,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type AuthTokens struct {
+	AccessToken  string
+	RefreshToken string
+}
+
 type AuthService struct {
 	secret   string
 	userRepo *repositories.UserRepository
@@ -32,19 +37,80 @@ func (s *AuthService) Register(email, password string, age int) error {
 	})
 }
 
-func (s *AuthService) Login(email, password string) (string, error) {
+func (s *AuthService) Login(email, password string) (AuthTokens, error) {
 	user, err := s.userRepo.GetByEmail(email)
+	if err != nil {
+		return AuthTokens{}, err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
+		return AuthTokens{}, errors.New("invalid credentials")
+	}
+
+	accessToken, err := s.generateAccessToken(user.ID, user.Role)
+	if err != nil {
+		return AuthTokens{}, err
+	}
+	refreshToken, err := s.generateRefreshToken(user.ID, user.Role)
+	if err != nil {
+		return AuthTokens{}, err
+	}
+	return AuthTokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *AuthService) Refresh(refreshToken string) (string, error) {
+	claims, err := s.parseToken(refreshToken)
 	if err != nil {
 		return "", err
 	}
-	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
-		return "", errors.New("invalid credentials")
+
+	tokenType, _ := claims["typ"].(string)
+	if tokenType != "refresh" {
+		return "", errors.New("invalid token type")
 	}
+	subFloat, ok := claims["sub"].(float64)
+	if !ok {
+		return "", errors.New("invalid token payload")
+	}
+	role, _ := claims["role"].(string)
+
+	return s.generateAccessToken(uint(subFloat), role)
+}
+
+func (s *AuthService) generateAccessToken(userID uint, role string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub":  user.ID,
-		"role": user.Role,
-		"exp":  time.Now().Add(24 * time.Hour).Unix(),
+		"sub":  userID,
+		"role": role,
+		"typ":  "access",
+		"exp":  time.Now().Add(15 * time.Minute).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.secret))
+}
+
+func (s *AuthService) generateRefreshToken(userID uint, role string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":  userID,
+		"role": role,
+		"typ":  "refresh",
+		"exp":  time.Now().Add(7 * 24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.secret))
+}
+
+func (s *AuthService) parseToken(tokenString string) (jwt.MapClaims, error) {
+	tkn, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.secret), nil
+	})
+	if err != nil || !tkn.Valid {
+		return nil, errors.New("invalid token")
+	}
+	claims, ok := tkn.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid claims")
+	}
+	return claims, nil
 }

@@ -16,6 +16,7 @@ func main() {
 	svc := services.NewContainer(cfg, db)
 
 	app := fiber.New()
+	app.Static("/uploads", "./uploads")
 	routes.Register(app, svc)
 
 	log.Printf("backend started on :%s", cfg.Port)
