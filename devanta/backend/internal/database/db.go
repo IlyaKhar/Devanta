@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"gorm.io/gorm/logger"
 
@@ -59,8 +60,8 @@ var defaultTasks = []seedTask{
 }
 
 var defaultFAQ = []seedFAQ{
-	{Category: "general", Question: "Что такое Devanta?", Answer: "Devanta — образовательная платформа с уроками и практикой по программированию.", SortOrder: 1},
-	{Category: "general", Question: "Для какого возраста подходит платформа?", Answer: "Основная аудитория — школьники 7–15 лет.", SortOrder: 2},
+	{Category: "general", Question: "Что такое Devanta?", Answer: "Devanta - образовательная платформа с уроками и практикой по программированию.", SortOrder: 1},
+	{Category: "general", Question: "Для какого возраста подходит платформа?", Answer: "Основная аудитория - школьники 7–15 лет.", SortOrder: 2},
 	{Category: "courses", Question: "Какие курсы доступны?", Answer: "JavaScript, Python, Golang, Web, Алгоритмы, Mobile и другие.", SortOrder: 1},
 	{Category: "courses", Question: "Сколько времени занимает курс?", Answer: "В среднем 6–12 месяцев в зависимости от темпа ученика.", SortOrder: 2},
 	{Category: "progress", Question: "Как работает система XP и уровней?", Answer: "XP начисляется за уроки/задачи/квизы, уровень растет автоматически.", SortOrder: 1},
@@ -69,13 +70,31 @@ var defaultFAQ = []seedFAQ{
 }
 
 func Connect(dsn string) *gorm.DB {
+	// Не спамим логами при ожидаемом «пользователь не найден» на логине и т.п.
+	gormLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: gormLogger,
 	})
 	if err != nil {
 		log.Fatalf("database connection failed: %v", err)
 	}
+	if err := ensureUsersTelegramIDNullable(db); err != nil {
+		log.Fatalf("schema fix users.telegram_id: %v", err)
+	}
 	return db
+}
+
+// EnsureUserSchema — подтягивает колонки users (avatar_url и др.) без полного migrate+seed.
+func EnsureUserSchema(db *gorm.DB) error {
+	return db.AutoMigrate(&models.User{})
 }
 
 func RunUpMigrations(db *gorm.DB) error {
@@ -101,6 +120,20 @@ func RunUpMigrations(db *gorm.DB) error {
 	}
 
 	return seedCatalog(db)
+}
+
+func ensureUsersTelegramIDNullable(db *gorm.DB) error {
+	return db.Exec(`
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'telegram_id' AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE users ALTER COLUMN telegram_id DROP NOT NULL;
+  END IF;
+END $$;
+`).Error
 }
 
 func RunDownMigrations(db *gorm.DB) error {

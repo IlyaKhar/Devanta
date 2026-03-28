@@ -1,0 +1,701 @@
+openapi: 3.0.3
+info:
+  title: Devanta API
+  description: |
+    REST API платформы Devanta. Авторизация: JWT в заголовке `Authorization: Bearer <accessToken>`.
+    Refresh-токен в httpOnly cookie `refresh_token` (для `/api/auth/refresh`).
+  version: "1.0.0"
+
+servers:
+  - url: /
+    description: Тот же хост, что и у API (локально :8080 или через nginx :80)
+
+tags:
+  - name: system
+  - name: auth
+  - name: learning
+  - name: quiz
+  - name: progress
+  - name: me
+  - name: parent
+  - name: reviews
+  - name: faq
+  - name: settings
+  - name: moderation
+  - name: admin
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token из POST /api/auth/login
+    bearerModerator:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT с ролью moderator или admin
+    bearerAdmin:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT с ролью admin
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Регистрация
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, age]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                age:
+                  type: integer
+      responses:
+        "200":
+          description: Успех
+        "400":
+          description: Ошибка валидации
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Вход (выдаёт accessToken, ставит cookie refresh_token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+        "401":
+          description: Неверные учётные данные
+
+  /api/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Обновить access token (нужен cookie refresh_token)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+        "401":
+          description: Нет или невалидный refresh
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Выход (сбрасывает refresh cookie)
+      responses:
+        "200":
+          description: OK
+
+  /api/modules:
+    get:
+      tags: [learning]
+      summary: Список модулей
+      description: query `tab=all|active` (для active нужен JWT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum: [all, active]
+            default: all
+      responses:
+        "200":
+          description: Список модулей
+        "401":
+          description: Для tab=active без токена
+
+  /api/modules/{id}/course:
+    get:
+      tags: [learning]
+      summary: Карточка курса модуля
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/modules/{id}/lessons:
+    get:
+      tags: [learning]
+      summary: Уроки модуля
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/lessons/{id}:
+    get:
+      tags: [learning]
+      summary: Урок по id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/lessons/{id}/task:
+    get:
+      tags: [learning]
+      summary: Задача, привязанная к уроку
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/tasks/special:
+    get:
+      tags: [learning]
+      summary: Особые челленджи
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/tasks:
+    get:
+      tags: [learning]
+      summary: Список задач
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [all, easy, medium, hard]
+            default: all
+      responses:
+        "200":
+          description: OK
+
+  /api/tasks/{id}:
+    get:
+      tags: [learning]
+      summary: Задача по id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/tasks/{id}/submit:
+    post:
+      tags: [learning]
+      summary: Отправить решение задачи
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Принято, начисление XP
+
+  /api/quiz/{moduleId}:
+    get:
+      tags: [quiz]
+      summary: Вопросы квиза блока
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: block
+          in: query
+          description: Номер блока (с 1)
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: OK
+
+  /api/quiz/{moduleId}/submit:
+    post:
+      tags: [quiz]
+      summary: Отправить ответы квиза
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: block
+          in: query
+          schema:
+            type: integer
+            default: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  description: Ключ — id вопроса (строка), значение — индекс ответа
+      responses:
+        "200":
+          description: Результат
+
+  /api/progress:
+    get:
+      tags: [progress]
+      summary: Прогресс пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/leaderboard:
+    get:
+      tags: [progress]
+      summary: Таблица лидеров
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            default: total
+      responses:
+        "200":
+          description: OK
+
+  /api/me/summary:
+    get:
+      tags: [me]
+      summary: Сводка профиля / XP
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/me/activity:
+    get:
+      tags: [me]
+      summary: Активность
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/me/achievements:
+    get:
+      tags: [me]
+      summary: Достижения
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/parent/invite:
+    get:
+      tags: [parent]
+      summary: Ссылка-приглашение для родителя
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: inviteLink, expiresAt
+
+  /api/parent/connect:
+    get:
+      tags: [parent]
+      summary: Страница/проверка подключения родителя
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: parent
+          in: query
+          schema:
+            type: string
+            description: Email или контакт родителя
+      responses:
+        "200":
+          description: OK
+
+  /api/reviews:
+    get:
+      tags: [reviews]
+      summary: Опубликованные отзывы
+      responses:
+        "200":
+          description: OK
+    post:
+      tags: [reviews]
+      summary: Оставить отзыв (на модерацию)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, rating]
+              properties:
+                text:
+                  type: string
+                rating:
+                  type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/faq:
+    get:
+      tags: [faq]
+      summary: FAQ (категории и вопросы)
+      responses:
+        "200":
+          description: OK
+
+  /api/settings/profile:
+    get:
+      tags: [settings]
+      summary: Профиль
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+    put:
+      tags: [settings]
+      summary: Обновить профиль
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                username:
+                  type: string
+                email:
+                  type: string
+                bio:
+                  type: string
+                avatarUrl:
+                  type: string
+      responses:
+        "200":
+          description: OK
+
+  /api/settings/notifications:
+    put:
+      tags: [settings]
+      summary: Настройки уведомлений
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emailNotifications:
+                  type: boolean
+                pushNotifications:
+                  type: boolean
+      responses:
+        "200":
+          description: OK
+
+  /api/settings/password:
+    post:
+      tags: [settings]
+      summary: Смена пароля
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        "200":
+          description: OK
+
+  /api/settings/avatar:
+    post:
+      tags: [settings]
+      summary: Загрузка аватара (multipart)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [avatar]
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: avatarUrl
+
+  /api/settings/account:
+    delete:
+      tags: [settings]
+      summary: Удалить аккаунт
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+
+  /api/moderation/reviews:
+    get:
+      tags: [moderation]
+      summary: Очередь отзывов
+      security:
+        - bearerModerator: []
+      responses:
+        "200":
+          description: OK
+
+  /api/moderation/reviews/{id}/publish:
+    post:
+      tags: [moderation]
+      summary: Опубликовать отзыв
+      security:
+        - bearerModerator: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /api/moderation/reviews/{id}/reject:
+    post:
+      tags: [moderation]
+      summary: Отклонить отзыв
+      security:
+        - bearerModerator: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: Список пользователей
+      security:
+        - bearerAdmin: []
+      responses:
+        "200":
+          description: OK
+
+  /api/admin/faq:
+    post:
+      tags: [admin]
+      summary: Создать запись FAQ
+      security:
+        - bearerAdmin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, question, answer]
+              properties:
+                category:
+                  type: string
+                question:
+                  type: string
+                answer:
+                  type: string
+                sortOrder:
+                  type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/admin/faq/{id}:
+    put:
+      tags: [admin]
+      summary: Обновить FAQ
+      security:
+        - bearerAdmin: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                question:
+                  type: string
+                answer:
+                  type: string
+                sortOrder:
+                  type: integer
+      responses:
+        "200":
+          description: OK
+    delete:
+      tags: [admin]
+      summary: Удалить FAQ
+      security:
+        - bearerAdmin: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+
+  /api/admin/block:
+    post:
+      tags: [admin]
+      summary: Заблокировать пользователя (заглушка)
+      security:
+        - bearerAdmin: []
+      responses:
+        "200":
+          description: OK
+
+  /api/admin/role:
+    post:
+      tags: [admin]
+      summary: Сменить роль (заглушка)
+      security:
+        - bearerAdmin: []
+      responses:
+        "200":
+          description: OK

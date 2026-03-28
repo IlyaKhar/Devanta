@@ -1,16 +1,20 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
+// Картинки в src/public/ — только статические new URL(), иначе Vite не положит файлы в сборку.
 const languages = [
   {
     name: "Python",
+    imageSrc: new URL("../public/python.png", import.meta.url).href,
     difficulty: "Лёгкий",
     popularity: "98%",
-    desc: "Простой синтаксис — идеально для первых шагов в коде.",
-    uses: ["Веб", "ИИ", "Автоматизация"],
+    desc: "Простой синтаксис - идеально для первых шагов в коде.",
+    uses: ["Веб", "Данные", "Автоматизация"],
     ides: ["VS Code", "PyCharm"],
   },
   {
     name: "JavaScript",
+    imageSrc: new URL("../public/javascript.png", import.meta.url).href,
     difficulty: "Средний",
     popularity: "95%",
     desc: "Язык веба: интерактивные страницы и игры в браузере.",
@@ -19,6 +23,7 @@ const languages = [
   },
   {
     name: "Java",
+    imageSrc: new URL("../public/java.png", import.meta.url).href,
     difficulty: "Средний",
     popularity: "92%",
     desc: "Надёжный язык для приложений и больших проектов.",
@@ -27,24 +32,27 @@ const languages = [
   },
   {
     name: "C++",
+    imageSrc: new URL("../public/cpp.png", import.meta.url).href,
     difficulty: "Сложный",
     popularity: "88%",
-    desc: "Скорость и контроль — основа игр и системного ПО.",
+    desc: "Скорость и контроль - основа игр и системного ПО.",
     uses: ["Игры", "Графика", "Встраиваемые системы"],
     ides: ["Visual Studio", "CLion"],
   },
   {
     name: "C#",
+    imageSrc: new URL("../public/csharp.png", import.meta.url).href,
     difficulty: "Средний",
-    popularity: "90%",
+    popularity: "85%",
     desc: "Удобный язык от Microsoft для игр и приложений.",
     uses: ["Unity", "Windows", "Веб"],
     ides: ["Visual Studio", "Rider"],
   },
   {
     name: "Swift",
+    imageSrc: new URL("../public/swift.png", import.meta.url).href,
     difficulty: "Средний",
-    popularity: "85%",
+    popularity: "80%",
     desc: "Современный язык для приложений под Apple.",
     uses: ["iOS", "macOS", "Мобильные приложения"],
     ides: ["Xcode", "VS Code"],
@@ -54,26 +62,114 @@ const languages = [
 const testimonials = [
   {
     name: "Ева",
-    text: "Раньше думала, что программирование — не для меня. Здесь всё по шагам, с заданиями как в игре — уже прошла первый модуль!",
+    imageSrc: new URL("../public/eva.png", import.meta.url).href,
+    text: "Ева была в поиске полезных занятий для сына. До этого он просто играл в телефоне, а теперь - сам заходит в приложение каждый день и учится с интересом.",
   },
   {
     name: "Дмитрий",
-    text: "Удобно учиться после школы: короткие уроки и сразу практика. Лидерборд мотивирует не бросать.",
+    imageSrc: new URL("../public/dmitry.png", import.meta.url).href,
+    text: "Дмитрий всегда мечтал научиться программировать. С нашей платформой он смог начать с нуля и уже создает свои первые проекты.",
   },
   {
     name: "Анна",
-    text: "Макс объясняет простыми словами, если застряла на задаче. Родителям нравится прогресс в кабинете.",
+    imageSrc: new URL("../public/anna.png", import.meta.url).href,
+    text: "Анна искала интересный способ провести время с пользой. Теперь программирование стало её любимым хобби и новой карьерной целью.",
   },
   {
-    name: "Максим",
-    text: "Хотел сделать свою игру — научился основам логики и циклов. Продолжаю к следующему модулю.",
+    name: "Никита",
+    imageSrc: new URL("../public/maxim.png", import.meta.url).href,
+    text: "Никита учится в 8 классе и уже мечтает стать разработчиком. Наше приложение помогает ему развивать навыки каждый день.",
   },
 ];
+
+/**
+ * Логотип языка (48×48 в вёрстке). eager + fetchPriority для первых карточек (above the fold),
+ * остальные — lazy + low, чтобы не забивать канал тяжёлыми фото ниже.
+ */
+function LanguageImage({ src, title, eager = false }: { src: string; title: string; eager?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-lg font-bold text-brand-700"
+        aria-hidden
+      >
+        {title[0]}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      width={48}
+      height={48}
+      className="h-12 w-12 shrink-0 rounded-xl bg-slate-50 object-contain p-1 ring-1 ring-slate-100"
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      fetchPriority={eager ? "auto" : "low"}
+      sizes="48px"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/** Верх карточки отзыва в макете Figma - портрет на всю ширину, сильное скругление. */
+function TestimonialCover({ src, name }: { src: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div
+        className="flex aspect-[3/4] w-full items-center justify-center bg-gradient-to-br from-brand-100 to-brand-200 text-4xl font-bold text-brand-700"
+        aria-hidden
+      >
+        {name[0]}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      width={600}
+      height={800}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function BriefcaseMini({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M4 9h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V9z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function KeyboardMini({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="2" y="7" width="20" height="10" rx="2" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M6 11h.01M10 11h4M16 11h.01M8 14h8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function LogoMark({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white shadow-sm ${className}`}
+      className={`flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white ${className}`}
       aria-hidden
     >
       &lt;/&gt;
@@ -100,7 +196,7 @@ export function HomePage() {
             </Link>
             <Link
               to="/register"
-              className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600"
+              className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               Начать обучение
             </Link>
@@ -118,32 +214,26 @@ export function HomePage() {
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base text-slate-600 sm:text-lg">
               Интерактивные уроки, мини-игры и практика прямо в браузере. Развивай логику и цифровую грамотность вместе с
-              наставником Максом и сообществом учеников.
+              кураторами и сообществом учеников.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 to="/register"
-                className="inline-flex w-full max-w-xs items-center justify-center rounded-2xl bg-brand-500 px-8 py-4 text-base font-semibold text-white shadow-md transition hover:bg-brand-600 sm:w-auto"
+                className="inline-flex w-full max-w-xs items-center justify-center rounded-2xl bg-brand-500 px-8 py-4 text-base font-semibold text-white transition hover:bg-brand-600 sm:w-auto"
               >
                 Начать бесплатно
               </Link>
-              <Link
-                to="/login"
-                className="text-sm font-semibold text-brand-600 underline-offset-2 hover:underline"
-              >
-                Уже есть аккаунт — войти
-              </Link>
             </div>
             <div className="mx-auto mt-12 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-3">
-              <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm ring-1 ring-slate-100">
+              <div className="rounded-2xl bg-white/80 px-4 py-4 ring-1 ring-slate-100">
                 <p className="text-2xl font-bold text-brand-600">50 000+</p>
                 <p className="text-sm text-slate-600">учеников</p>
               </div>
-              <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm ring-1 ring-slate-100">
+              <div className="rounded-2xl bg-white/80 px-4 py-4 ring-1 ring-slate-100">
                 <p className="text-2xl font-bold text-brand-600">100+</p>
                 <p className="text-sm text-slate-600">курсов и модулей</p>
               </div>
-              <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm ring-1 ring-slate-100">
+              <div className="rounded-2xl bg-white/80 px-4 py-4 ring-1 ring-slate-100">
                 <p className="text-2xl font-bold text-brand-600">1000+</p>
                 <p className="text-sm text-slate-600">задач и квизов</p>
               </div>
@@ -154,47 +244,64 @@ export function HomePage() {
         {/* Языки */}
         <section className="px-4 py-14 sm:py-16">
           <div className="mx-auto max-w-6xl">
-            <div className="mb-10 flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="mb-2 flex items-center gap-2 text-brand-600">
-                  <span className="text-xl" aria-hidden>
-                    &lt;/&gt;
-                  </span>
-                  <span className="text-sm font-semibold uppercase tracking-wide">Направления</span>
-                </div>
+            <div className="mb-10 text-center">
+              <div className="mb-3 flex items-center justify-center gap-2 text-brand-600">
+                <span className="text-xl font-bold" aria-hidden>
+                  &lt;/&gt;
+                </span>
                 <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Популярные языки программирования</h2>
-                <p className="mt-2 max-w-2xl text-slate-600">Выбери старт — от простого Python до Swift для приложений.</p>
               </div>
+              <p className="mx-auto max-w-2xl text-slate-600">
+                Выбери язык и начни свой путь в программировании уже сегодня.
+              </p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {languages.map((lang) => (
+              {languages.map((lang, idx) => (
                 <article
                   key={lang.name}
-                  className="flex flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  className="flex flex-col rounded-2xl border border-slate-100/80 bg-white p-5 transition"
                 >
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <h3 className="text-lg font-bold text-slate-900">{lang.name}</h3>
-                    <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-brand-100">
-                      {lang.difficulty}
-                    </span>
+                  <div className="mb-4 flex items-start gap-3">
+                    <LanguageImage src={lang.imageSrc} title={lang.name} eager={idx < 3} />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-bold text-slate-900">{lang.name}</h3>
+                      <span className="mt-2 inline-block rounded-full bg-brand-500 px-2.5 py-0.5 text-xs font-semibold text-white">
+                        {lang.difficulty}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold leading-none text-brand-600">{lang.popularity}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">популярность</p>
+                    </div>
                   </div>
-                  <p className="mb-2 text-xs font-medium text-brand-600">{lang.popularity} популярность</p>
-                  <p className="mb-4 flex-1 text-sm text-slate-600">{lang.desc}</p>
+                  <p className="mb-4 flex-1 text-sm leading-relaxed text-slate-600">{lang.desc}</p>
                   <div className="mb-3">
-                    <p className="mb-1.5 text-xs font-medium text-slate-500">Где используется</p>
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <BriefcaseMini className="shrink-0 text-amber-800/90" />
+                      Где используется
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {lang.uses.map((t) => (
-                        <span key={t} className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                        <span
+                          key={t}
+                          className="rounded-lg bg-slate-100/90 px-2.5 py-1 text-xs font-medium text-slate-700"
+                        >
                           {t}
                         </span>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <p className="mb-1.5 text-xs font-medium text-slate-500">Популярные IDE</p>
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <KeyboardMini className="shrink-0 text-slate-800" />
+                      Популярные IDE
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {lang.ides.map((t) => (
-                        <span key={t} className="rounded-md bg-slate-50 px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-100">
+                        <span
+                          key={t}
+                          className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-100"
+                        >
                           {t}
                         </span>
                       ))}
@@ -206,34 +313,34 @@ export function HomePage() {
             <div className="mt-10 flex justify-center">
               <Link
                 to="/register"
-                className="inline-flex rounded-2xl bg-brand-500 px-8 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-brand-600"
+                className="inline-flex rounded-2xl bg-brand-500 px-8 py-3.5 text-base font-semibold text-white transition hover:bg-brand-600"
               >
-                Начать изучение сейчас
+                Начать изучение языков
               </Link>
             </div>
           </div>
         </section>
 
-        {/* Отзывы */}
+        {/* Отзывы — тяжёлые фото: lazy + fetchPriority low */}
         <section className="border-y border-slate-100 bg-white px-4 py-14 sm:py-16">
           <div className="mx-auto max-w-6xl">
             <h2 className="mb-2 text-center text-2xl font-bold text-slate-900 sm:text-3xl">
-              IT — это про возможности, а не про ограничения
+              IT - это про возможности, а не про ограничения
             </h2>
-            <p className="mx-auto mb-10 max-w-2xl text-center text-slate-600">
-              Реальные истории ребят, которые начали с основ и не бросили.
-            </p>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <p className="mx-auto mb-10 max-w-2xl text-center text-slate-600">У них получилось - получится и у вас</p>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {testimonials.map((t) => (
                 <figure
                   key={t.name}
-                  className="flex flex-col rounded-2xl border border-slate-100 bg-[#FAFAF8] p-5 shadow-sm"
+                  className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white"
                 >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">
-                    {t.name[0]}
+                  <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden">
+                    <TestimonialCover src={t.imageSrc} name={t.name} />
                   </div>
-                  <figcaption className="mb-2 font-semibold text-slate-900">{t.name}</figcaption>
-                  <blockquote className="text-sm leading-relaxed text-slate-600">&ldquo;{t.text}&rdquo;</blockquote>
+                  <div className="flex flex-1 flex-col p-5 pt-4">
+                    <figcaption className="text-base font-bold text-slate-900">{t.name}</figcaption>
+                    <blockquote className="mt-2 text-left text-sm leading-relaxed text-slate-600">{t.text}</blockquote>
+                  </div>
                 </figure>
               ))}
             </div>
@@ -247,14 +354,14 @@ export function HomePage() {
 
         {/* Финальный CTA */}
         <section className="px-4 py-14">
-          <div className="mx-auto max-w-4xl rounded-3xl bg-brand-500 px-6 py-12 text-center shadow-lg sm:px-10 sm:py-14">
+          <div className="mx-auto max-w-4xl rounded-3xl bg-brand-500 px-6 py-12 text-center sm:px-10 sm:py-14">
             <h2 className="text-2xl font-bold text-white sm:text-3xl">Готов начать своё путешествие в мир кода?</h2>
             <p className="mx-auto mt-3 max-w-xl text-brand-50">
-              Присоединяйся к тысячам учеников: уроки, задачи и Макс помогут не сорваться на полпути.
+              Присоединяйся к тысячам учеников: уроки и задачи помогут не сорваться на полпути.
             </p>
             <Link
               to="/register"
-              className="mt-8 inline-flex rounded-2xl bg-white px-8 py-3.5 text-base font-semibold text-brand-600 shadow-md transition hover:bg-brand-50"
+              className="mt-8 inline-flex rounded-2xl bg-white px-8 py-3.5 text-base font-semibold text-brand-600 transition hover:bg-brand-50"
             >
               Начать обучение сейчас
             </Link>

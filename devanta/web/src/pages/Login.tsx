@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthShell } from "../components/auth/AuthShell";
-import { api } from "../services/api";
+import { api, getAxiosErrorMessage } from "../services/api";
 import { useAuthStore } from "../store/auth";
 
 export function LoginPage() {
@@ -24,11 +24,7 @@ export function LoginPage() {
       setToken(data.accessToken);
       navigate("/dashboard", { replace: true });
     } catch (err: unknown) {
-      const msg =
-        err && typeof err === "object" && "response" in err
-          ? String((err as { response?: { data?: { message?: string } } }).response?.data?.message)
-          : "Не удалось войти";
-      setError(msg || "Неверный email или пароль");
+      setError(getAxiosErrorMessage(err, "Не удалось войти. Проверь email и пароль."));
     } finally {
       setLoading(false);
     }

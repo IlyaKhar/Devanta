@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"devanta/backend/internal/services"
+	"devanta/backend/internal/util"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -40,7 +42,7 @@ func (h *SettingsHandler) GetProfile(c *fiber.Ctx) error {
 		"username":           user.Username,
 		"email":              user.Email,
 		"bio":                user.Bio,
-		"avatarUrl":          user.AvatarURL,
+		"avatarUrl":          util.NormalizeAvatarURL(user.AvatarURL),
 		"emailNotifications": user.EmailNotifications,
 		"pushNotifications":  user.PushNotifications,
 	})
@@ -96,7 +98,7 @@ func (h *SettingsHandler) UpdateProfile(c *fiber.Ctx) error {
 		"username":   normalizedUsername,
 		"email":      normalizedEmail,
 		"bio":        strings.TrimSpace(req.Bio),
-		"avatar_url": strings.TrimSpace(req.AvatarURL),
+		"avatar_url": util.NormalizeAvatarURL(req.AvatarURL),
 	}); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot update profile")
 	}
@@ -167,6 +169,21 @@ func (h *SettingsHandler) DeleteAccount(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": "deleted"})
 }
 
+func avatarExtFromMIME(ct string) string {
+	switch {
+	case strings.Contains(ct, "jpeg"):
+		return ".jpg"
+	case strings.Contains(ct, "png"):
+		return ".png"
+	case strings.Contains(ct, "gif"):
+		return ".gif"
+	case strings.Contains(ct, "webp"):
+		return ".webp"
+	default:
+		return ""
+	}
+}
+
 func (h *SettingsHandler) UploadAvatar(c *fiber.Ctx) error {
 	userID, ok := c.Locals("userID").(uint)
 	if !ok || userID == 0 {
@@ -183,7 +200,6 @@ func (h *SettingsHandler) UploadAvatar(c *fiber.Ctx) error {
 	if file.Size > 2*1024*1024 {
 		return fiber.NewError(fiber.StatusBadRequest, "max avatar size is 2MB")
 	}
-	ext := strings.ToLower(filepath.Ext(file.Filename))
 	allowed := map[string]bool{
 		".jpg":  true,
 		".jpeg": true,
@@ -191,25 +207,57 @@ func (h *SettingsHandler) UploadAvatar(c *fiber.Ctx) error {
 		".gif":  true,
 		".webp": true,
 	}
-	if !allowed[ext] {
-		return fiber.NewError(fiber.StatusBadRequest, "only jpg/jpeg/png/gif/webp allowed")
-	}
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if err := os.MkdirAll(filepath.Join("uploads", "avatars"), 0o755); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot prepare upload directory")
 	}
-	filename := fmt.Sprintf("avatar_u%d_%d%s", userID, time.Now().UnixNano(), ext)
-	savePath := filepath.Join("uploads", "avatars", filename)
-	if err := c.SaveFile(file, savePath); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "cannot save avatar")
+
+	avatarsDir := filepath.Join("uploads", "avatars")
+	var finalPath string
+	var filename string
+
+	if allowed[ext] {
+		filename = fmt.Sprintf("avatar_u%d_%d%s", userID, time.Now().UnixNano(), ext)
+		finalPath = filepath.Join(avatarsDir, filename)
+		if err := c.SaveFile(file, finalPath); err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "cannot save avatar")
+		}
+	} else {
+		// Файлы без расширения / с «левым» именем: сохраняем во временный файл, тип — по сигнатуре.
+		tmpPath := filepath.Join(avatarsDir, fmt.Sprintf("_tmp_u%d_%d", userID, time.Now().UnixNano()))
+		if err := c.SaveFile(file, tmpPath); err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "cannot save avatar")
+		}
+		head, readErr := os.ReadFile(tmpPath)
+		if readErr != nil || len(head) == 0 {
+			_ = os.Remove(tmpPath)
+			return fiber.NewError(fiber.StatusBadRequest, "empty avatar file")
+		}
+		n := len(head)
+		if n > 512 {
+			n = 512
+		}
+		ext = avatarExtFromMIME(http.DetectContentType(head[:n]))
+		if !allowed[ext] {
+			_ = os.Remove(tmpPath)
+			return fiber.NewError(fiber.StatusBadRequest, "only jpg/jpeg/png/gif/webp allowed")
+		}
+		filename = fmt.Sprintf("avatar_u%d_%d%s", userID, time.Now().UnixNano(), ext)
+		finalPath = filepath.Join(avatarsDir, filename)
+		if err := os.Rename(tmpPath, finalPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return fiber.NewError(fiber.StatusInternalServerError, "cannot finalize avatar")
+		}
 	}
+
 	avatarURL := "/uploads/avatars/" + filename
 	if err := h.services.UserRepo.UpdateByID(userID, map[string]interface{}{"avatar_url": avatarURL}); err != nil {
-		_ = os.Remove(savePath)
+		_ = os.Remove(finalPath)
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot save avatar url")
 	}
 	oldAvatarURL := strings.TrimSpace(user.AvatarURL)
 	if strings.HasPrefix(oldAvatarURL, "/uploads/avatars/") && oldAvatarURL != avatarURL {
-		oldAvatarPath := filepath.Join("uploads", "avatars", filepath.Base(oldAvatarURL))
+		oldAvatarPath := filepath.Join(avatarsDir, filepath.Base(oldAvatarURL))
 		_ = os.Remove(oldAvatarPath)
 	}
 	return c.JSON(fiber.Map{"avatarUrl": avatarURL})

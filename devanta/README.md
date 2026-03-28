@@ -1,6 +1,6 @@
 # Devanta
 
-Devanta — образовательная платформа для детей 7–15 лет: уроки, задачи, квизы, геймификация и ИИ-ассистент Max.
+Devanta — образовательная платформа для детей 7–15 лет: уроки, задачи, квизы и геймификация.
 
 ## Monorepo
 
@@ -48,7 +48,7 @@ curl http://localhost/health
 - `postgres` — база данных
 - `backend` — API (Go + Fiber + GORM)
 - `web` — React frontend
-- `bot` — Telegram бот Max
+- `bot` — Telegram support-бот
 - `nginx` — reverse proxy
 
 ## Make команды
@@ -103,12 +103,6 @@ curl http://localhost/health
 - `POST /api/admin/block`
 - `POST /api/admin/role`
 
-### AI Max
-- `POST /api/ai/explain`
-- `POST /api/ai/hint`
-- `POST /api/ai/check`
-- `GET /api/ai/limits`
-
 ## Примечание
 
-Текущий каркас готов для расширения: добавляйте реальные use-case сервисы, валидацию, полноценный RBAC, rate limiting и интеграцию с Yandex AI API через backend.
+Текущий каркас готов для расширения: добавляйте реальные use-case сервисы, валидацию, полноценный RBAC и rate limiting.

@@ -5,6 +5,8 @@ import "time"
 type User struct {
 	ID                 uint      `gorm:"primaryKey" json:"id"`
 	Email              string    `gorm:"uniqueIndex;not null" json:"email"`
+	// TelegramID - опционально (веб-регистрация без Telegram); NULL = не привязан.
+	TelegramID         *int64    `gorm:"uniqueIndex" json:"telegramId,omitempty"`
 	Password           string    `gorm:"not null" json:"-"`
 	Role               string    `gorm:"type:varchar(20);default:student" json:"role"`
 	Age                int       `json:"age"`
@@ -50,7 +52,7 @@ type Task struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// SpecialChallenge — ежедневные/недельные челленджи (витрина на странице «Задачи»).
+// SpecialChallenge - ежедневные/недельные челленджи (витрина на странице «Задачи»).
 type SpecialChallenge struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Code        string    `gorm:"uniqueIndex;not null" json:"code"`
@@ -62,7 +64,7 @@ type SpecialChallenge struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// FAQEntry — запись для страницы FAQ.
+// FAQEntry - запись для страницы FAQ.
 type FAQEntry struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Category  string    `gorm:"index;not null" json:"category"`

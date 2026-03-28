@@ -2,6 +2,19 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
 
+// Иконки страницы «Задачи» (src/public/UI/Tasks)
+const tasksUi = {
+  trophy: new URL("../public/UI/Tasks/Tasks&Challenges Trophy.png", import.meta.url).href,
+  special: new URL("../public/UI/Tasks/Special tasks.png", import.meta.url).href,
+  allTasks: new URL("../public/UI/Tasks/All tasks.png", import.meta.url).href,
+  time: new URL("../public/UI/Tasks/Time.png", import.meta.url).href,
+  pupil: new URL("../public/UI/Tasks/Pupil.png", import.meta.url).href,
+} as const;
+
+function UiImg({ src, className = "h-5 w-5", alt = "" }: { src: string; className?: string; alt?: string }) {
+  return <img src={src} alt={alt} width={20} height={20} className={`shrink-0 object-contain ${className}`} />;
+}
+
 type Difficulty = "Легко" | "Средне" | "Сложно";
 
 type Challenge = {
@@ -89,8 +102,8 @@ export function TasksPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-8">
       <section>
-        <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <span aria-hidden>🏆</span>
+        <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <UiImg src={tasksUi.trophy} className="h-9 w-9" alt="" aria-hidden />
           Задачи и челленджи
         </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-400">
@@ -99,8 +112,8 @@ export function TasksPage() {
       </section>
 
       <section className="space-y-4" aria-labelledby="special-tasks">
-        <h2 id="special-tasks" className="flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
-          <span aria-hidden>⚡</span>
+        <h2 id="special-tasks" className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white">
+          <UiImg src={tasksUi.special} className="h-8 w-8" alt="" aria-hidden />
           Специальные задачи
         </h2>
 
@@ -113,18 +126,21 @@ export function TasksPage() {
           {specialChallenges.map((challenge) => (
             <article
               key={challenge.id}
-              className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-5 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/5"
+              className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-5 dark:border-amber-500/30 dark:bg-amber-500/5"
             >
               <div className="mb-4 flex items-start justify-between gap-3">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{challenge.title}</h3>
-                <span className="rounded-full bg-brand-500 px-2 py-1 text-xs font-semibold text-white">
+                <div className="flex min-w-0 items-start gap-2">
+                  <UiImg src={tasksUi.special} className="h-8 w-8" alt="" aria-hidden />
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">{challenge.title}</h3>
+                </div>
+                <span className="shrink-0 rounded-full bg-brand-500 px-2 py-1 text-xs font-semibold text-white">
                   +{challenge.rewardXp} XP
                 </span>
               </div>
               <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">{challenge.description}</p>
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-                  <span aria-hidden>🕒</span>
+                <span className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <UiImg src={tasksUi.time} className="h-4 w-4" alt="" aria-hidden />
                   {challenge.duration}
                 </span>
                 <button
@@ -141,7 +157,8 @@ export function TasksPage() {
 
       <section className="space-y-4" aria-labelledby="all-tasks">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="all-tasks" className="text-2xl font-bold text-slate-900 dark:text-white">
+          <h2 id="all-tasks" className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white">
+            <UiImg src={tasksUi.allTasks} className="h-8 w-8" alt="" aria-hidden />
             Все задачи
           </h2>
           <div className="flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">
@@ -150,11 +167,10 @@ export function TasksPage() {
                 key={item}
                 type="button"
                 onClick={() => setFilter(item)}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                  filter === item
-                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${filter === item
+                    ? "bg-white text-slate-900 dark:bg-slate-700 dark:text-white"
                     : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-                }`}
+                  }`}
               >
                 {item}
               </button>
@@ -171,46 +187,60 @@ export function TasksPage() {
           {tasks.map((task) => (
             <article
               key={task.id}
-              className={`rounded-2xl border p-4 shadow-sm transition md:p-5 ${
-                task.completed
+              className={`flex gap-4 rounded-2xl border p-4 transition md:gap-5 md:p-5 ${task.completed
                   ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-500/5"
                   : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
-              }`}
+                }`}
             >
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{task.title}</h3>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{task.description}</p>
+              <div className="shrink-0 pt-1" aria-hidden>
+                {task.completed ? (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="h-10 w-10 rounded-full border-2 border-dashed border-slate-200 dark:border-slate-600" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">{task.title}</h3>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{task.description}</p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${difficultyBadgeClass(task.difficulty)}`}
+                  >
+                    {task.difficulty}
+                  </span>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${difficultyBadgeClass(task.difficulty)}`}>
-                  {task.difficulty}
-                </span>
-              </div>
 
-              <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  {task.category}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span aria-hidden>🏆</span>
-                  {task.xp} XP
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span aria-hidden>🕒</span>
-                  {task.time}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span aria-hidden>🎮</span>
-                  {task.solves} решений
-                </span>
-              </div>
+                <div className="mb-4 flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-400 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+                  <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {task.category}
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <UiImg src={tasksUi.trophy} className="h-4 w-4" alt="" aria-hidden />
+                    {task.xp} XP
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <UiImg src={tasksUi.time} className="h-4 w-4" alt="" aria-hidden />
+                    {task.time}
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <UiImg src={tasksUi.pupil} className="h-4 w-4" alt="" aria-hidden />
+                    {task.solves} решений
+                  </span>
+                </div>
 
-              <Link
-                to={`/task/${task.id}`}
-                className="inline-flex rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
-              >
-                {task.completed ? "Решить снова" : "Решить задачу"}
-              </Link>
+                <Link
+                  to={`/task/${task.id}`}
+                  className="inline-flex rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
+                >
+                  {task.completed ? "Решить снова" : "Решить задачу"}
+                </Link>
+              </div>
             </article>
           ))}
           {!isLoadingTasks && tasks.length === 0 ? (

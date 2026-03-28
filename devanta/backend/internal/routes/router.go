@@ -1,11 +1,13 @@
 package routes
 
 import (
+	"devanta/backend/docs"
 	"devanta/backend/internal/handlers"
 	"devanta/backend/internal/middleware"
 	"devanta/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/swagger"
 )
 
 func Register(app *fiber.App, s *services.Container) {
@@ -14,6 +16,26 @@ func Register(app *fiber.App, s *services.Container) {
 		AllowCredentials: true,
 	}))
 	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) })
+
+	serveOpenAPI := func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "application/yaml; charset=utf-8")
+		return c.Send(docs.OpenAPISpec)
+	}
+	// Спека: корень (удобно для nginx /openapi.yaml) и старый путь под /api.
+	app.Get("/openapi.yaml", serveOpenAPI)
+	app.Get("/api/docs/openapi.yaml", serveOpenAPI)
+
+	swaggerCfg := swagger.Config{
+		Title:                "Devanta API",
+		URL:                  "/openapi.yaml",
+		TryItOutEnabled:      true,
+		PersistAuthorization: true,
+		DeepLinking:          true,
+		ValidatorUrl:         "none",
+	}
+	// Отдельный handler на каждый префикс: у middleware свой sync.Once для base path.
+	app.Get("/swagger/*", swagger.New(swaggerCfg))
+	app.Get("/api/swagger/*", swagger.New(swaggerCfg))
 
 	auth := handlers.NewAuthHandler(s)
 	learning := handlers.NewLearningHandler(s)
@@ -26,7 +48,6 @@ func Register(app *fiber.App, s *services.Container) {
 	review := handlers.NewReviewHandler(s)
 	moderation := handlers.NewModerationHandler(s)
 	admin := handlers.NewAdminHandler(s)
-	ai := handlers.NewAIHandler(s)
 
 	api := app.Group("/api")
 	api.Post("/auth/register", auth.Register)
@@ -75,9 +96,4 @@ func Register(app *fiber.App, s *services.Container) {
 	api.Delete("/admin/faq/:id", middleware.JWTProtected(s.Config.JWTSecret, "admin"), faq.AdminDeleteFAQ)
 	api.Post("/admin/block", middleware.JWTProtected(s.Config.JWTSecret, "admin"), admin.Block)
 	api.Post("/admin/role", middleware.JWTProtected(s.Config.JWTSecret, "admin"), admin.Role)
-
-	api.Post("/ai/explain", middleware.JWTProtected(s.Config.JWTSecret, "student"), ai.Explain)
-	api.Post("/ai/hint", middleware.JWTProtected(s.Config.JWTSecret, "student"), ai.Hint)
-	api.Post("/ai/check", middleware.JWTProtected(s.Config.JWTSecret, "student"), ai.Check)
-	api.Get("/ai/limits", middleware.JWTProtected(s.Config.JWTSecret, "student"), ai.Limits)
 }

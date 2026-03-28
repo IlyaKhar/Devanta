@@ -8,7 +8,6 @@ type Config struct {
 	DatabaseURL  string
 	JWTSecret    string
 	CORSOrigin   string
-	YandexAPIKey string
 }
 
 func Load() Config {
@@ -17,8 +16,11 @@ func Load() Config {
 		AppEnv:       envOrDefault("APP_ENV", "development"),
 		DatabaseURL:  envOrDefault("DATABASE_URL", "postgres://devanta:devanta@localhost:5432/devanta?sslmode=disable"),
 		JWTSecret:    envOrDefault("JWT_SECRET", "change_me"),
-		CORSOrigin:   envOrDefault("CORS_ORIGIN", "http://localhost:5173"),
-		YandexAPIKey: os.Getenv("YANDEX_API_KEY"),
+		// Несколько origin через запятую: прод через nginx ( :80), Vite ( :5173), 127.0.0.1.
+		CORSOrigin: envOrDefault(
+			"CORS_ORIGIN",
+			"http://localhost,http://localhost:5173,http://127.0.0.1,http://127.0.0.1:5173",
+		),
 	}
 }
 

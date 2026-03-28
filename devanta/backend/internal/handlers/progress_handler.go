@@ -80,7 +80,7 @@ func (h *ProgressHandler) GetLeaderboard(c *fiber.Ctx) error {
 			{Name: "Анна К.", XP: periodXP(period, 2450), Level: 15, Achievements: 28},
 			{Name: "Дмитрий М.", XP: periodXP(period, 2380), Level: 14, Achievements: 25},
 			{Name: "София Л.", XP: periodXP(period, 2150), Level: 13, Achievements: 24},
-			{Name: "Максим П.", XP: periodXP(period, 1980), Level: 12, Achievements: 22},
+			{Name: "Илья П.", XP: periodXP(period, 1980), Level: 12, Achievements: 22},
 			{Name: "Елена В.", XP: periodXP(period, 1750), Level: 11, Achievements: 20},
 			{Name: "Александр С.", XP: periodXP(period, 1650), Level: 10, Achievements: 18},
 			{Name: "Мария И.", XP: periodXP(period, 1580), Level: 10, Achievements: 17},

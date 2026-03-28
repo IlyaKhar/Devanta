@@ -50,7 +50,7 @@ export function TaskPage() {
             <h1 className="text-3xl font-black text-slate-900 dark:text-white">{task.title}</h1>
             <p className="mt-2 text-slate-600 dark:text-slate-300">{task.question}</p>
             <p className="mt-3 text-sm font-semibold text-brand-600 dark:text-brand-400">Награда: +{task.xpReward} XP</p>
-            <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">Редактор кода и отправка решения — следующим шагом.</p>
+            <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">Редактор кода и отправка решения - следующим шагом.</p>
           </>
         ) : null}
       </div>

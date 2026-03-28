@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthShell } from "../components/auth/AuthShell";
-import { api } from "../services/api";
+import { api, getAxiosErrorMessage } from "../services/api";
 import { useAuthStore } from "../store/auth";
 
 export function RegisterPage() {
@@ -30,11 +30,7 @@ export function RegisterPage() {
       setToken(data.accessToken);
       navigate("/dashboard", { replace: true });
     } catch (err: unknown) {
-      const msg =
-        err && typeof err === "object" && "response" in err
-          ? String((err as { response?: { data?: { message?: string } } }).response?.data?.message)
-          : "Ошибка регистрации";
-      setError(msg || "Проверь данные и попробуй снова");
+      setError(getAxiosErrorMessage(err, "Ошибка регистрации. Проверь данные и попробуй снова."));
     } finally {
       setLoading(false);
     }
@@ -44,7 +40,7 @@ export function RegisterPage() {
     <AuthShell
       title="Создай аккаунт"
       subtitle="Учись программированию вместе с Devanta"
-      footerNote="Возраст нужен, чтобы Макс подстраивал объяснения под тебя."
+      footerNote="Возраст нужен для подбора уровня сложности материалов."
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>

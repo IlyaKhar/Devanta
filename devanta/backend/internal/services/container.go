@@ -19,7 +19,6 @@ type Container struct {
 	SpecialChallengeRepo *repositories.SpecialChallengeRepository
 	ParentConnectionRepo *repositories.ParentConnectionRepository
 	AuthService          *AuthService
-	AIService            *AIService
 	Gamification         *GamificationService
 }
 
@@ -47,7 +46,6 @@ func NewContainer(cfg config.Config, db *gorm.DB) *Container {
 		SpecialChallengeRepo: specialChallengeRepo,
 		ParentConnectionRepo: parentConnectionRepo,
 		AuthService:          NewAuthService(cfg.JWTSecret, userRepo),
-		AIService:            NewAIService(cfg.YandexAPIKey),
 		Gamification:         NewGamificationService(db),
 	}
 }

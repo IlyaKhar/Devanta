@@ -13,12 +13,15 @@ import (
 func main() {
 	cfg := config.Load()
 	db := database.Connect(cfg.DatabaseURL)
+	if err := database.EnsureUserSchema(db); err != nil {
+		log.Fatalf("user schema: %v", err)
+	}
 	svc := services.NewContainer(cfg, db)
 
-	app := fiber.New()
-	app.Static("/uploads", "./uploads")
+	app := fiber.New(fiber.Config{BodyLimit: 8 * 1024 * 1024})
+	routes.RegisterUploads(app)
 	routes.Register(app, svc)
 
-	log.Printf("backend started on :%s", cfg.Port)
+	log.Printf("backend started on :%s | Swagger: /swagger/ или /api/swagger/ (спека: /openapi.yaml)", cfg.Port)
 	log.Fatal(app.Listen(":" + cfg.Port))
 }

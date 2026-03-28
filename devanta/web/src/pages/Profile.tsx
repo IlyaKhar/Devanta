@@ -1,10 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { mediaUrl } from "../lib/mediaUrl";
 import { api } from "../services/api";
+
+// Иконки страницы «Профиль» (src/public/UI/Profile)
+const profileUi = {
+  overviewTab: new URL("../public/UI/Profile/review and achievments.png", import.meta.url).href,
+  parentTab: new URL("../public/UI/Profile/parentsControl.png", import.meta.url).href,
+  avatar: new URL("../public/UI/Profile/CompletedATask.png", import.meta.url).href,
+  settings: new URL("../public/UI/Profile/settings.png", import.meta.url).href,
+  lessonsStat: new URL("../public/UI/Profile/LessonsCompleted.png", import.meta.url).href,
+  tasksStat: new URL("../public/UI/Profile/TasksCompleted.png", import.meta.url).href,
+  achievementsStat: new URL("../public/UI/Profile/Achievments.png", import.meta.url).href,
+  totalXpStat: new URL("../public/UI/Profile/TotalEXP.png", import.meta.url).href,
+  copyLink: new URL("../public/UI/Profile/CopyLink.png", import.meta.url).href,
+  share: new URL("../public/UI/Profile/Share.png", import.meta.url).href,
+} as const;
+
+function ProfileUiImg({ src, className = "h-5 w-5" }: { src: string; className?: string }) {
+  return <img src={src} alt="" width={20} height={20} className={`shrink-0 object-contain ${className}`} aria-hidden />;
+}
 
 type Summary = {
   fullName: string;
   username: string;
+  avatarUrl?: string;
   xp: number;
   level: number;
   tasksSolved: number;
@@ -93,7 +113,7 @@ export function ProfilePage() {
     }
     try {
       await navigator.share({
-        title: "Devanta — подключение родителя",
+        title: "Devanta - подключение родителя",
         text: "Подключись к прогрессу ученика в Devanta",
         url: actualInviteLink,
       });
@@ -135,30 +155,45 @@ export function ProfilePage() {
         <button
           type="button"
           onClick={() => setTab("overview")}
-          className={`rounded-full px-4 py-1.5 text-sm font-semibold ring-1 ${
-            tab === "overview"
-              ? "bg-white text-slate-800 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-              : "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
-          }`}
+          className={`rounded-full px-4 py-1.5 text-sm font-semibold ring-1 ${tab === "overview"
+            ? "bg-white text-slate-800 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+            : "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+            }`}
         >
-          📊 Обзор и достижения
+          <span className="inline-flex items-center gap-2">
+            <ProfileUiImg src={profileUi.overviewTab} className="h-5 w-5" />
+            Обзор и достижения
+          </span>
         </button>
         <button
           type="button"
           onClick={() => setTab("parent")}
-          className={`rounded-full px-4 py-1.5 text-sm font-semibold ring-1 ${
-            tab === "parent"
-              ? "bg-white text-slate-800 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-              : "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
-          }`}
+          className={`rounded-full px-4 py-1.5 text-sm font-semibold ring-1 ${tab === "parent"
+            ? "bg-white text-slate-800 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+            : "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+            }`}
         >
-          🛡 Родительский контроль
+          <span className="inline-flex items-center gap-2">
+            <ProfileUiImg src={profileUi.parentTab} className="h-5 w-5" />
+            Родительский контроль
+          </span>
         </button>
       </div>
       <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
         <section className="space-y-4">
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 text-4xl">🧑‍💻</div>
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-brand-100 ring-2 ring-brand-200/60 dark:bg-neutral-900 dark:ring-neutral-700">
+              {summary?.avatarUrl?.trim() ? (
+                <img
+                  src={mediaUrl(summary.avatarUrl)}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  key={summary.avatarUrl.trim()}
+                />
+              ) : (
+                <ProfileUiImg src={profileUi.avatar} className="h-11 w-11" />
+              )}
+            </div>
             <h1 className="text-center text-2xl font-bold text-slate-900 dark:text-white">{summary?.fullName?.trim() || "Ученик"}</h1>
             <p className="mt-1 text-center text-sm text-slate-500 dark:text-slate-400">@{summary?.username?.trim() || "user"}</p>
             <div className="mt-4 flex justify-center"><span className="rounded-lg bg-brand-500 px-3 py-1 text-sm font-semibold text-white">Уровень {currentLevel}</span></div>
@@ -170,18 +205,43 @@ export function ProfilePage() {
             <button
               type="button"
               onClick={() => navigate("/settings")}
-              className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              ⚙️ Настройки профиля
+              <ProfileUiImg src={profileUi.settings} className="h-5 w-5" />
+              Настройки профиля
             </button>
           </article>
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <h2 className="mb-3 text-xl font-bold text-slate-900 dark:text-white">Статистика</h2>
             <ul className="space-y-2 text-sm">
-              <li className="flex justify-between text-slate-600 dark:text-slate-300"><span>📘 Уроков завершено</span><b>{summary?.lessonsCompleted ?? 0}</b></li>
-              <li className="flex justify-between text-slate-600 dark:text-slate-300"><span>🧩 Задач решено</span><b>{summary?.tasksSolved ?? 0}</b></li>
-              <li className="flex justify-between text-slate-600 dark:text-slate-300"><span>🎯 Достижений</span><b>{summary?.achievements ?? 0}</b></li>
-              <li className="flex justify-between text-slate-600 dark:text-slate-300"><span>📈 Всего XP</span><b>{xp}</b></li>
+              <li className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span className="inline-flex items-center gap-2">
+                  <ProfileUiImg src={profileUi.lessonsStat} className="h-5 w-5" />
+                  Уроков завершено
+                </span>
+                <b>{summary?.lessonsCompleted ?? 0}</b>
+              </li>
+              <li className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span className="inline-flex items-center gap-2">
+                  <ProfileUiImg src={profileUi.tasksStat} className="h-5 w-5" />
+                  Задач решено
+                </span>
+                <b>{summary?.tasksSolved ?? 0}</b>
+              </li>
+              <li className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span className="inline-flex items-center gap-2">
+                  <ProfileUiImg src={profileUi.achievementsStat} className="h-5 w-5" />
+                  Достижений
+                </span>
+                <b>{summary?.achievements ?? 0}</b>
+              </li>
+              <li className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span className="inline-flex items-center gap-2">
+                  <ProfileUiImg src={profileUi.totalXpStat} className="h-5 w-5" />
+                  Всего XP
+                </span>
+                <b>{xp}</b>
+              </li>
             </ul>
           </article>
         </section>
@@ -236,16 +296,18 @@ export function ProfilePage() {
                 <button
                   type="button"
                   onClick={copyInviteLink}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  📋 Копировать ссылку
+                  <ProfileUiImg src={profileUi.copyLink} className="h-5 w-5" />
+                  Копировать ссылку
                 </button>
                 <button
                   type="button"
                   onClick={shareInviteLink}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  🔗 Поделиться
+                  <ProfileUiImg src={profileUi.share} className="h-5 w-5" />
+                  Поделиться
                 </button>
               </div>
               <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">

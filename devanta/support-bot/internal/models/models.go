@@ -12,6 +12,11 @@ type User struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
+// TableName — отдельная таблица от web-users (backend), иначе AutoMigrate ломает существующих пользователей.
+func (User) TableName() string {
+	return "support_telegram_users"
+}
+
 type Ticket struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"index;not null" json:"userId"`

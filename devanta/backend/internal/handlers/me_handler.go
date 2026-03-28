@@ -7,6 +7,7 @@ import (
 
 	"devanta/backend/internal/models"
 	"devanta/backend/internal/services"
+	"devanta/backend/internal/util"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -51,6 +52,7 @@ func (h *MeHandler) Summary(c *fiber.Ctx) error {
 		"fullName":         strings.TrimSpace(user.FullName),
 		"username":         strings.TrimSpace(user.Username),
 		"email":            user.Email,
+		"avatarUrl":        util.NormalizeAvatarURL(user.AvatarURL),
 		"xp":               totalXP,
 		"level":            level,
 		"tasksSolved":      tasksSolved,

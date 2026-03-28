@@ -8,6 +8,7 @@ import (
 	"devanta/backend/internal/repositories"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type AuthTokens struct {
@@ -40,6 +41,10 @@ func (s *AuthService) Register(email, password string, age int) error {
 func (s *AuthService) Login(email, password string) (AuthTokens, error) {
 	user, err := s.userRepo.GetByEmail(email)
 	if err != nil {
+		// Нет пользователя - тот же ответ, что и при неверном пароле (без утечки факта регистрации).
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return AuthTokens{}, errors.New("invalid credentials")
+		}
 		return AuthTokens{}, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
