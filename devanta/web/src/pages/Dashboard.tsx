@@ -9,6 +9,7 @@ type Summary = {
   username: string;
   xp: number;
   level: number;
+  coins?: number;
   tasksSolved: number;
 };
 
@@ -52,7 +53,7 @@ export function DashboardPage() {
         <p className="mt-2 text-slate-600 dark:text-slate-400">Продолжай учиться и двигаться к своей цели.</p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <p className="text-sm text-slate-500 dark:text-slate-400">Текущий уровень</p>
           <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{summary?.level ?? 0}</p>
@@ -64,6 +65,10 @@ export function DashboardPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <p className="text-sm text-slate-500 dark:text-slate-400">Получено XP</p>
           <p className="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-400">{summary?.xp ?? 0}</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 dark:border-amber-500/25 dark:bg-amber-500/5">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Монеты</p>
+          <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-300">{summary?.coins ?? 0}</p>
         </div>
       </section>
 

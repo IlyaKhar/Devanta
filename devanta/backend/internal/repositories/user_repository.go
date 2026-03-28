@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"errors"
+
 	"devanta/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -31,6 +33,14 @@ func (r *UserRepository) GetByID(userID uint) (*models.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// AddCoins — атомарно увеличить баланс монет (delta может быть отрицательным, но не используем).
+func (r *UserRepository) AddCoins(userID uint, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	return r.db.Model(&models.User{}).Where("id = ?", userID).UpdateColumn("coins", gorm.Expr("coins + ?", delta)).Error
 }
 
 func (r *UserRepository) List() ([]models.User, error) {
@@ -72,4 +82,25 @@ func (r *UserRepository) ExistsUsernameExceptUser(username string, userID uint) 
 		Where("username = ? AND id <> ?", username, userID).
 		Count(&count).Error
 	return count > 0, err
+}
+
+// TryGrantAchievement — выдать ачивку по коду, если запись в achievements есть и у юзера её ещё нет.
+func (r *UserRepository) TryGrantAchievement(userID uint, code string) error {
+	var ach models.Achievement
+	if err := r.db.Where("code = ?", code).First(&ach).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	var n int64
+	if err := r.db.Model(&models.UserAchievement{}).
+		Where("user_id = ? AND achievement_id = ?", userID, ach.ID).
+		Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	return r.db.Create(&models.UserAchievement{UserID: userID, AchievementID: ach.ID}).Error
 }

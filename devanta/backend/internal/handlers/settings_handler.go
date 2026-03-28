@@ -208,11 +208,14 @@ func (h *SettingsHandler) UploadAvatar(c *fiber.Ctx) error {
 		".webp": true,
 	}
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if err := os.MkdirAll(filepath.Join("uploads", "avatars"), 0o755); err != nil {
+	uploadsRoot, absErr := filepath.Abs("uploads")
+	if absErr != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "cannot resolve uploads path")
+	}
+	avatarsDir := filepath.Join(uploadsRoot, "avatars")
+	if err := os.MkdirAll(avatarsDir, 0o755); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot prepare upload directory")
 	}
-
-	avatarsDir := filepath.Join("uploads", "avatars")
 	var finalPath string
 	var filename string
 
@@ -250,15 +253,16 @@ func (h *SettingsHandler) UploadAvatar(c *fiber.Ctx) error {
 		}
 	}
 
-	avatarURL := "/uploads/avatars/" + filename
+	avatarURL := "/api/uploads/avatars/" + filename
 	if err := h.services.UserRepo.UpdateByID(userID, map[string]interface{}{"avatar_url": avatarURL}); err != nil {
 		_ = os.Remove(finalPath)
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot save avatar url")
 	}
 	oldAvatarURL := strings.TrimSpace(user.AvatarURL)
-	if strings.HasPrefix(oldAvatarURL, "/uploads/avatars/") && oldAvatarURL != avatarURL {
+	if (strings.HasPrefix(oldAvatarURL, "/uploads/avatars/") || strings.HasPrefix(oldAvatarURL, "/api/uploads/avatars/")) &&
+		oldAvatarURL != avatarURL {
 		oldAvatarPath := filepath.Join(avatarsDir, filepath.Base(oldAvatarURL))
 		_ = os.Remove(oldAvatarPath)
 	}
-	return c.JSON(fiber.Map{"avatarUrl": avatarURL})
+	return c.JSON(fiber.Map{"avatarUrl": util.NormalizeAvatarURL(avatarURL)})
 }

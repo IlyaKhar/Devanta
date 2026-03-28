@@ -1,10 +1,10 @@
 package database
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"gorm.io/gorm/logger"
@@ -22,15 +22,6 @@ type seedModule struct {
 	Level          string
 }
 
-type seedTask struct {
-	ModuleTitle string
-	Title       string
-	Type        string
-	Question    string
-	AnswerKey   string
-	XPReward    int
-}
-
 type seedFAQ struct {
 	Category  string
 	Question  string
@@ -38,25 +29,11 @@ type seedFAQ struct {
 	SortOrder int
 }
 
+// Три активных демо-курса: полный контент в seed_democontent.go + сид квизов по блокам.
 var defaultModules = []seedModule{
 	{Title: "JavaScript-разработчик", DurationMonths: 9, Students: 12450, Rating: 4.8, Level: "С нуля"},
 	{Title: "Python-разработчик", DurationMonths: 10, Students: 15320, Rating: 4.8, Level: "С нуля"},
-	{Title: "Golang-разработчик", DurationMonths: 8, Students: 8890, Rating: 4.7, Level: "С нуля"},
 	{Title: "Веб-разработчик", DurationMonths: 12, Students: 18760, Rating: 4.8, Level: "С нуля"},
-	{Title: "Основы алгоритмов", DurationMonths: 6, Students: 9420, Rating: 4.6, Level: "С нуля"},
-	{Title: "Мобильная разработка", DurationMonths: 11, Students: 7230, Rating: 4.7, Level: "С нуля"},
-	{Title: "React-разработчик", DurationMonths: 7, Students: 10110, Rating: 4.7, Level: "С нуля"},
-	{Title: "Backend-разработчик", DurationMonths: 9, Students: 8650, Rating: 4.6, Level: "С нуля"},
-	{Title: "Работа с базами данных", DurationMonths: 5, Students: 6120, Rating: 4.5, Level: "С нуля"},
-}
-
-var defaultTasks = []seedTask{
-	{ModuleTitle: "JavaScript-разработчик", Title: "Сумма чисел", Type: "basics", Question: "Найди сумму двух чисел.", AnswerKey: "return a+b", XPReward: 50},
-	{ModuleTitle: "Python-разработчик", Title: "Реверс строки", Type: "strings", Question: "Переверни строку задом наперед.", AnswerKey: "s[::-1]", XPReward: 75},
-	{ModuleTitle: "Веб-разработчик", Title: "Палиндром", Type: "strings", Question: "Проверь, является ли строка палиндромом.", AnswerKey: "normalized==reversed", XPReward: 100},
-	{ModuleTitle: "Основы алгоритмов", Title: "Числа Фибоначчи", Type: "algorithms", Question: "Найди N-ое число Фибоначчи.", AnswerKey: "dp/iterative", XPReward: 150},
-	{ModuleTitle: "Backend-разработчик", Title: "Сортировка пузырьком", Type: "algorithms", Question: "Реализуй алгоритм сортировки пузырьком.", AnswerKey: "nested loops", XPReward: 200},
-	{ModuleTitle: "Golang-разработчик", Title: "Поиск в глубину", Type: "graphs", Question: "Реализуй обход графа в глубину.", AnswerKey: "dfs recursion/stack", XPReward: 300},
 }
 
 var defaultFAQ = []seedFAQ{
@@ -94,12 +71,55 @@ func Connect(dsn string) *gorm.DB {
 
 // EnsureUserSchema — подтягивает колонки users (avatar_url и др.) без полного migrate+seed.
 func EnsureUserSchema(db *gorm.DB) error {
-	return db.AutoMigrate(&models.User{})
+	return db.AutoMigrate(&models.User{}, &models.UserChallengeClaim{})
+}
+
+// prepareParentConnectionSchema — старый parent_contact → дроп таблицы; новая схема через AutoMigrate.
+func prepareParentConnectionSchema(db *gorm.DB) error {
+	var n int64
+	if err := db.Raw(`
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'parent_connections' AND column_name = 'parent_contact'
+	`).Scan(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return db.Exec(`DROP TABLE IF EXISTS parent_connections CASCADE`).Error
+	}
+	return nil
+}
+
+// EnsureParentConnectionSchema — для cmd/server без полного migrate up.
+func EnsureParentConnectionSchema(db *gorm.DB) error {
+	if err := prepareParentConnectionSchema(db); err != nil {
+		return err
+	}
+	return db.AutoMigrate(&models.ParentConnection{})
+}
+
+// EnsureTaskSchema — колонки starter_code, hints_json, checks_json для задач с кодом.
+func EnsureTaskSchema(db *gorm.DB) error {
+	return db.AutoMigrate(&models.Task{})
+}
+
+// EnsureQuizQuestionSchema — block_index у вопросов квиза (после обновления без полного migrate).
+func EnsureQuizQuestionSchema(db *gorm.DB) error {
+	return db.AutoMigrate(&models.QuizQuestion{})
+}
+
+// EnsureBlockQuizResultSchema — lesson_in_block + новый unique; снимаем старый индекс без слота урока.
+func EnsureBlockQuizResultSchema(db *gorm.DB) error {
+	_ = db.Exec(`DROP INDEX IF EXISTS idx_block_quiz_unique`).Error
+	return db.AutoMigrate(&models.BlockQuizResult{})
 }
 
 func RunUpMigrations(db *gorm.DB) error {
+	if err := prepareParentConnectionSchema(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.UserChallengeClaim{},
 		&models.Module{},
 		&models.Lesson{},
 		&models.Task{},
@@ -138,7 +158,7 @@ END $$;
 
 func RunDownMigrations(db *gorm.DB) error {
 	tables := []string{
-		"parent_connections", "ai_logs", "moderation_logs", "reviews", "user_achievements", "achievements",
+		"parent_connections", "user_challenge_claims", "ai_logs", "moderation_logs", "reviews", "user_achievements", "achievements",
 		"xp_events", "user_progresses", "block_quiz_results", "quiz_questions", "faq_entries", "special_challenges", "tasks", "lessons", "modules", "users",
 	}
 	for _, table := range tables {
@@ -155,10 +175,14 @@ func EnsureMigrationDir(base string) error {
 
 func seedCatalog(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
+		activeTitles := []string{"JavaScript-разработчик", "Python-разработчик", "Веб-разработчик"}
+		if err := tx.Where("title NOT IN ?", activeTitles).Delete(&models.Module{}).Error; err != nil {
+			return err
+		}
+
 		lessonsByModuleTitle := map[string][]models.Lesson{}
 		const blocksCount = 10
 		const lessonsPerBlock = 3
-		const finalBlockIndex = blocksCount + 1
 
 		for i, item := range defaultModules {
 			sortOrder := i + 1
@@ -188,9 +212,7 @@ func seedCatalog(db *gorm.DB) error {
 			for block := 1; block <= blocksCount; block++ {
 				for l := 1; l <= lessonsPerBlock; l++ {
 					globalSort := (block-1)*lessonsPerBlock + l
-					lessonTitle := "Блок " + strconv.Itoa(block) + " · Видео " + strconv.Itoa(l)
-					videoURL := "https://example.com/video/" + strconv.Itoa(int(module.ID)) + "/" + strconv.Itoa(block) + "/" + strconv.Itoa(l)
-					content := "Теория для блока " + strconv.Itoa(block) + ", видео " + strconv.Itoa(l) + ". Здесь появится реальный контент."
+					lessonTitle, videoURL, content := DemoLessonContent(item.Title, globalSort)
 					lesson := models.Lesson{
 						ModuleID: module.ID,
 						Title:    lessonTitle,
@@ -215,9 +237,7 @@ func seedCatalog(db *gorm.DB) error {
 			}
 			// Финальный блок 11: итоговое занятие (один урок).
 			finalSort := blocksCount*lessonsPerBlock + 1
-			finalTitle := "Итоговое занятие"
-			finalVideoURL := "https://example.com/video/" + strconv.Itoa(int(module.ID)) + "/final"
-			finalContent := "Итоговая теория и подготовка к финальному тесту."
+			finalTitle, finalVideoURL, finalContent := DemoLessonContent(item.Title, finalSort)
 			finalLesson := models.Lesson{
 				ModuleID: module.ID,
 				Title:    finalTitle,
@@ -239,45 +259,58 @@ func seedCatalog(db *gorm.DB) error {
 			}
 			lessonRows = append(lessonRows, finalLesson)
 			lessonsByModuleTitle[item.Title] = lessonRows
-		}
 
-		// Одна задачка на блок (привязываем к первому уроку блока).
-		for _, lessonRows := range lessonsByModuleTitle {
-			for block := 1; block <= blocksCount; block++ {
-				firstIdx := (block - 1) * lessonsPerBlock
-				if firstIdx < 0 || firstIdx >= len(lessonRows) {
-					continue
-				}
-				firstLesson := lessonRows[firstIdx]
-				taskTitle := "Задача блока " + strconv.Itoa(block)
-				task := models.Task{
-					LessonID:  firstLesson.ID,
-					Title:     taskTitle,
-					Type:      "basics",
-					Question:  "Напиши решение задачи для блока " + strconv.Itoa(block) + ".",
-					AnswerKey: "demo",
-					XPReward:  60 + block*15,
-				}
-				if err := tx.Where("lesson_id = ? AND title = ?", firstLesson.ID, taskTitle).FirstOrCreate(&task).Error; err != nil {
+			// Пересобираем вопросы квиза: у каждого блока свой набор (block_index).
+			if err := tx.Where("module_id = ?", module.ID).Delete(&models.QuizQuestion{}).Error; err != nil {
+				return err
+			}
+			for _, qq := range BuildDemoQuizQuestions(module.ID, item.Title) {
+				row := qq
+				if err := tx.Create(&row).Error; err != nil {
 					return err
 				}
 			}
-			// Финальная задачка (привязываем к финальному уроку).
-			finalSort := blocksCount*lessonsPerBlock + 1
+		}
+
+		// По одной задаче с кодом на каждый урок (включая финал).
+		for moduleTitle, lessonRows := range lessonsByModuleTitle {
 			for _, lesson := range lessonRows {
-				if lesson.SortOrder != finalSort {
-					continue
+				spec := DemoCodeTaskForLesson(moduleTitle, lesson.SortOrder)
+				if err := tx.Where("lesson_id = ?", lesson.ID).Delete(&models.Task{}).Error; err != nil {
+					return err
 				}
-				taskTitle := "Финальная задача"
 				task := models.Task{
-					LessonID:  lesson.ID,
-					Title:     taskTitle,
-					Type:      "basics",
-					Question:  "Финальная задача по модулю. Собери всё вместе.",
-					AnswerKey: "demo",
-					XPReward:  300,
+					LessonID:    lesson.ID,
+					Title:       spec.Title,
+					Type:        "code",
+					Question:    spec.Question,
+					AnswerKey:   "auto",
+					Language:    "javascript",
+					StarterCode: spec.StarterCode,
+					HintsJSON:   spec.HintsJSON,
+					ChecksJSON:  spec.ChecksJSON,
+					XPReward:    spec.XPReward,
 				}
-				if err := tx.Where("lesson_id = ? AND title = ?", lesson.ID, taskTitle).FirstOrCreate(&task).Error; err != nil {
+				if err := tx.Create(&task).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, seed := range DemoAchievementSeeds() {
+			var existing models.Achievement
+			err := tx.Where("code = ?", seed.Code).First(&existing).Error
+			if err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				if err := tx.Create(&models.Achievement{Code: seed.Code, Title: seed.Title}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if existing.Title != seed.Title {
+				if err := tx.Model(&existing).Update("title", seed.Title).Error; err != nil {
 					return err
 				}
 			}

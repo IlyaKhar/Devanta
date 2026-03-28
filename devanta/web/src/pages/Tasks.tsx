@@ -22,7 +22,9 @@ type Challenge = {
   title: string;
   description: string;
   rewardXp: number;
+  rewardCoins: number;
   duration: string;
+  completed: boolean;
 };
 
 type TaskItem = {
@@ -31,11 +33,14 @@ type TaskItem = {
   description: string;
   category: string;
   xp: number;
+  rewardCoins: number;
   time: string;
   solves: number;
   difficulty: Difficulty;
   completed?: boolean;
 };
+
+type TaskScope = "open" | "done" | "all";
 
 function difficultyBadgeClass(level: Difficulty) {
   if (level === "Легко")
@@ -47,28 +52,24 @@ function difficultyBadgeClass(level: Difficulty) {
 
 export function TasksPage() {
   const [filter, setFilter] = useState<"Все" | Difficulty>("Все");
+  const [taskScope, setTaskScope] = useState<TaskScope>("open");
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [specialChallenges, setSpecialChallenges] = useState<Challenge[]>([]);
   const [isLoadingSpecial, setIsLoadingSpecial] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  function loadSpecial() {
     setIsLoadingSpecial(true);
     api
       .get<Challenge[]>("/tasks/special")
-      .then(({ data }) => {
-        if (!cancelled) setSpecialChallenges(data);
-      })
-      .catch(() => {
-        if (!cancelled) setSpecialChallenges([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingSpecial(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then(({ data }) => setSpecialChallenges(Array.isArray(data) ? data : []))
+      .catch(() => setSpecialChallenges([]))
+      .finally(() => setIsLoadingSpecial(false));
+  }
+
+  useEffect(() => {
+    loadSpecial();
   }, []);
 
   useEffect(() => {
@@ -83,9 +84,9 @@ export function TasksPage() {
     };
 
     api
-      .get<TaskItem[]>(`/tasks?difficulty=${difficultyMap[filter]}`)
+      .get<TaskItem[]>(`/tasks?difficulty=${difficultyMap[filter]}&scope=${taskScope}`)
       .then(({ data }) => {
-        if (!cancelled) setTasks(data);
+        if (!cancelled) setTasks(Array.isArray(data) ? data : []);
       })
       .catch(() => {
         if (!cancelled) setTasks([]);
@@ -97,7 +98,17 @@ export function TasksPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter]);
+  }, [filter, taskScope]);
+
+  async function claimChallenge(code: string) {
+    setClaimingId(code);
+    try {
+      await api.post(`/tasks/special/${encodeURIComponent(code)}/claim`);
+      loadSpecial();
+    } finally {
+      setClaimingId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -108,6 +119,9 @@ export function TasksPage() {
         </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-400">
           Прокачивай свои навыки, решая практические задания
+        </p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          «Активные» — только несданные; с галочками смотри «Сданные» / «Все». Ачивки за задачи вешаются на успешный сабмит (даже если урок уже был закрыт раньше).
         </p>
       </section>
 
@@ -126,16 +140,22 @@ export function TasksPage() {
           {specialChallenges.map((challenge) => (
             <article
               key={challenge.id}
-              className="rounded-2xl border border-amber-200/70 bg-amber-50/40 p-5 dark:border-amber-500/30 dark:bg-amber-500/5"
+              className={`rounded-2xl border p-5 ${challenge.completed
+                ? "border-emerald-200/80 bg-emerald-50/35 dark:border-emerald-500/25 dark:bg-emerald-500/5"
+                : "border-amber-200/70 bg-amber-50/40 dark:border-amber-500/30 dark:bg-amber-500/5"
+                }`}
             >
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-2">
                   <UiImg src={tasksUi.special} className="h-8 w-8" alt="" aria-hidden />
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">{challenge.title}</h3>
                 </div>
-                <span className="shrink-0 rounded-full bg-brand-500 px-2 py-1 text-xs font-semibold text-white">
-                  +{challenge.rewardXp} XP
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="rounded-full bg-brand-500 px-2 py-1 text-xs font-semibold text-white">+{challenge.rewardXp} XP</span>
+                  <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-amber-500">
+                    +{challenge.rewardCoins ?? 0} монет
+                  </span>
+                </div>
               </div>
               <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">{challenge.description}</p>
               <div className="flex items-center justify-between">
@@ -143,12 +163,18 @@ export function TasksPage() {
                   <UiImg src={tasksUi.time} className="h-4 w-4" alt="" aria-hidden />
                   {challenge.duration}
                 </span>
-                <button
-                  type="button"
-                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-600"
-                >
-                  Начать
-                </button>
+                {challenge.completed ? (
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Выполнено</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={claimingId === challenge.id}
+                    onClick={() => void claimChallenge(challenge.id)}
+                    className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+                  >
+                    {claimingId === challenge.id ? "…" : "Забрать награду"}
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -161,20 +187,43 @@ export function TasksPage() {
             <UiImg src={tasksUi.allTasks} className="h-8 w-8" alt="" aria-hidden />
             Все задачи
           </h2>
-          <div className="flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">
-            {(["Все", "Легко", "Средне", "Сложно"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${filter === item
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-1 dark:bg-slate-800">
+              {(
+                [
+                  { k: "open" as TaskScope, label: "Активные" },
+                  { k: "done" as TaskScope, label: "Сданные" },
+                  { k: "all" as TaskScope, label: "Все" },
+                ] as const
+              ).map(({ k, label }) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTaskScope(k)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition sm:text-sm ${taskScope === k
                     ? "bg-white text-slate-900 dark:bg-slate-700 dark:text-white"
                     : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-                  }`}
-              >
-                {item}
-              </button>
-            ))}
+                    }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">
+              {(["Все", "Легко", "Средне", "Сложно"] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setFilter(item)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${filter === item
+                    ? "bg-white text-slate-900 dark:bg-slate-700 dark:text-white"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                    }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -224,6 +273,11 @@ export function TasksPage() {
                     <UiImg src={tasksUi.trophy} className="h-4 w-4" alt="" aria-hidden />
                     {task.xp} XP
                   </span>
+                  {!task.completed ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
+                      +{task.rewardCoins ?? 0} монет
+                    </span>
+                  ) : null}
                   <span className="inline-flex items-center gap-2">
                     <UiImg src={tasksUi.time} className="h-4 w-4" alt="" aria-hidden />
                     {task.time}

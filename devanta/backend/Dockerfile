@@ -5,6 +5,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/migrate ./cmd/migrate
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/demo-complete ./cmd/demo-complete
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/course-smoke ./cmd/course-smoke
 
 FROM alpine:3.20
 WORKDIR /app
@@ -13,6 +15,8 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 COPY --from=builder /bin/server /usr/local/bin/server
 COPY --from=builder /bin/migrate /usr/local/bin/migrate
+COPY --from=builder /bin/demo-complete /usr/local/bin/demo-complete
+COPY --from=builder /bin/course-smoke /usr/local/bin/course-smoke
 COPY migrations ./migrations
 RUN mkdir -p /app/uploads/avatars && chown -R appuser:appuser /app/uploads
 EXPOSE 8080

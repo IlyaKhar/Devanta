@@ -13,6 +13,18 @@ type LessonPayload = {
 
 type LessonTask = { id: number; title: string; question: string; xpReward: number };
 
+/** Если ссылка YouTube — отдаём URL для iframe /embed/… */
+function youtubeEmbedUrl(url: string): string | null {
+  const u = url.trim();
+  if (!u) return null;
+  if (u.includes("youtube.com/embed/")) return u;
+  const fromQuery = u.match(/[?&]v=([^&]+)/);
+  if (fromQuery?.[1]) return `https://www.youtube.com/embed/${fromQuery[1]}`;
+  const short = u.match(/youtu\.be\/([^?]+)/);
+  if (short?.[1]) return `https://www.youtube.com/embed/${short[1]}`;
+  return null;
+}
+
 export function LessonPage() {
   const { id } = useParams();
   const [lesson, setLesson] = useState<LessonPayload | null>(null);
@@ -59,6 +71,14 @@ export function LessonPage() {
     return Math.floor((lesson.sortOrder - 1) / lessonsPerBlock) + 1;
   }, [lesson?.sortOrder]);
 
+  // Слот урока 1..3 внутри блока — к этому номеру привязан отдельный набор вопросов в API.
+  const lessonInBlock = useMemo(() => {
+    if (!lesson?.sortOrder) return 1;
+    return ((lesson.sortOrder - 1) % 3) + 1;
+  }, [lesson?.sortOrder]);
+
+  const videoEmbedSrc = useMemo(() => (lesson?.videoUrl ? youtubeEmbedUrl(lesson.videoUrl) : null), [lesson?.videoUrl]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <Link to={lesson ? `/module/${lesson.moduleId}` : "/modules"} className="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
@@ -78,10 +98,20 @@ export function LessonPage() {
         <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           {step === "video" ? (
             lesson?.videoUrl ? (
-              <div className="space-y-2">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Видео из БД:</p>
-                <a href={lesson.videoUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                  Открыть видео →
+              <div className="space-y-3">
+                {videoEmbedSrc ? (
+                  <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                    <iframe
+                      title="Видео урока"
+                      className="h-full w-full"
+                      src={videoEmbedSrc}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : null}
+                <a href={lesson.videoUrl} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                  Открыть ссылку в новой вкладке →
                 </a>
               </div>
             ) : (
@@ -90,8 +120,11 @@ export function LessonPage() {
           ) : null}
           {step === "theory" ? <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{lesson?.content || "Теоретический материал урока пока пуст."}</p> : null}
           {step === "quiz" ? (
-            <Link to={lesson ? `/quiz/${lesson.moduleId}?block=${blockIndex}` : "/modules"} className="inline-flex rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600">
-              Перейти к тесту модуля
+            <Link
+              to={lesson ? `/quiz/${lesson.moduleId}?block=${blockIndex}&lesson=${lessonInBlock}` : "/modules"}
+              className="inline-flex rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              Тест по этому уроку
             </Link>
           ) : null}
           {step === "task" ? (

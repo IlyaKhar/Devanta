@@ -20,7 +20,7 @@ func RegisterUploads(app *fiber.App) {
 	}
 	log.Printf("uploads serve root: %s", root)
 
-	app.Get("/uploads/*", func(c *fiber.Ctx) error {
+	serve := func(c *fiber.Ctx) error {
 		tail := strings.Trim(strings.TrimSpace(c.Params("*")), "/")
 		if tail == "" {
 			return fiber.ErrNotFound
@@ -40,5 +40,9 @@ func RegisterUploads(app *fiber.App) {
 			return fiber.ErrNotFound
 		}
 		return c.SendFile(full)
-	})
+	}
+
+	// Старый путь (nginx ^~ /uploads) и новый под префиксом API — один handler, один физический каталог.
+	app.Get("/uploads/*", serve)
+	app.Get("/api/uploads/*", serve)
 }

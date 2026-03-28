@@ -61,6 +61,43 @@ func (r *LessonRepository) StatusesByUserAndModule(userID, moduleID uint) (map[u
 	return out, nil
 }
 
+// IsLessonCompleted — урок отмечен completed в user_progresses.
+func (r *LessonRepository) IsLessonCompleted(userID, lessonID uint) (bool, error) {
+	var n int64
+	err := r.db.Model(&models.UserProgress{}).
+		Where("user_id = ? AND lesson_id = ? AND status = ?", userID, lessonID, "completed").
+		Count(&n).Error
+	return n > 0, err
+}
+
+// CompletedLessonIDsForUser — множество lesson_id со статусом completed (для списка задач).
+// CountCompletedLessonsWithTask — сколько уроков у пользователя в статусе completed, к которым привязана задача (для ачивок, без привязки только к XP-событиям).
+func (r *LessonRepository) CountCompletedLessonsWithTask(userID uint) (int64, error) {
+	var n int64
+	err := r.db.Raw(`
+		SELECT COUNT(DISTINCT up.lesson_id)
+		FROM user_progresses up
+		INNER JOIN tasks t ON t.lesson_id = up.lesson_id
+		WHERE up.user_id = ? AND up.status = ?
+	`, userID, "completed").Scan(&n).Error
+	return n, err
+}
+
+func (r *LessonRepository) CompletedLessonIDsForUser(userID uint) (map[uint]struct{}, error) {
+	var ids []uint
+	err := r.db.Model(&models.UserProgress{}).
+		Where("user_id = ? AND status = ?", userID, "completed").
+		Pluck("lesson_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out, nil
+}
+
 func (r *LessonRepository) UpsertUserProgress(userID, lessonID uint, status string, score int) error {
 	var row models.UserProgress
 	err := r.db.Where("user_id = ? AND lesson_id = ?", userID, lessonID).First(&row).Error

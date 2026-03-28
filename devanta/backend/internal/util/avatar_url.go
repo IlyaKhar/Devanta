@@ -21,6 +21,10 @@ func NormalizeAvatarURL(raw string) string {
 		return "https:" + s
 	}
 	if strings.HasPrefix(s, "/") {
+		// Миграция пути: старые значения /uploads/avatars/… → тот же файл через /api/uploads/… (единый префикс с nginx /api/).
+		if strings.HasPrefix(s, "/uploads/avatars/") {
+			return "/api/uploads/avatars/" + strings.TrimPrefix(s, "/uploads/avatars/")
+		}
 		return s
 	}
 	if strings.HasPrefix(lower, "images.unsplash.com/") {

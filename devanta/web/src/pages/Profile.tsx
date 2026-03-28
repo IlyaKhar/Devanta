@@ -27,6 +27,7 @@ type Summary = {
   avatarUrl?: string;
   xp: number;
   level: number;
+  coins?: number;
   tasksSolved: number;
   lessonsCompleted: number;
   achievements: number;
@@ -44,15 +45,15 @@ export function ProfilePage() {
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState("");
   const [isInviteLoading, setIsInviteLoading] = useState(false);
-  const [parentContact, setParentContact] = useState("");
-  const [isConnectingParent, setIsConnectingParent] = useState(false);
+  const [parentConnections, setParentConnections] = useState<{ parentUserId: number; parentEmail: string; connectedAt: string }[]>([]);
+  const [isConnectionsLoading, setIsConnectionsLoading] = useState(false);
   const xp = summary?.xp ?? 0;
   const currentLevel = summary?.level ?? 0;
   const nextLevelXP = Math.max(100, (currentLevel + 1) * 100);
   const progressPercent = Math.min(100, Math.round((xp / nextLevelXP) * 100));
-  const fallbackInviteLink = `${window.location.origin}/parent/connect?student=alex_codes`;
-  const actualInviteLink = inviteLink || fallbackInviteLink;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(actualInviteLink)}`;
+  const qrImageUrl = inviteLink
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(inviteLink)}`
+    : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -92,14 +93,28 @@ export function ProfilePage() {
         if (data.inviteLink) setInviteLink(data.inviteLink);
       })
       .catch(() => {
-        setInviteNotice("Не удалось получить защищенную ссылку, использую базовую.");
+        setInviteNotice("Не удалось сгенерировать ссылку-приглашение. Проверь API и перезайди на вкладку.");
       })
       .finally(() => setIsInviteLoading(false));
   }, [tab, inviteLink, isInviteLoading]);
 
+  useEffect(() => {
+    if (tab !== "parent") return;
+    setIsConnectionsLoading(true);
+    api
+      .get<{ items: { parentUserId: number; parentEmail: string; connectedAt: string }[] }>("/parent/connections")
+      .then(({ data }) => setParentConnections(Array.isArray(data.items) ? data.items : []))
+      .catch(() => setParentConnections([]))
+      .finally(() => setIsConnectionsLoading(false));
+  }, [tab, inviteLink]);
+
   async function copyInviteLink() {
+    if (!inviteLink) {
+      setInviteNotice("Ссылка ещё не готова — подожди секунду.");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(actualInviteLink);
+      await navigator.clipboard.writeText(inviteLink);
       setInviteNotice("Ссылка скопирована.");
     } catch {
       setInviteNotice("Не удалось скопировать ссылку.");
@@ -107,6 +122,10 @@ export function ProfilePage() {
   }
 
   async function shareInviteLink() {
+    if (!inviteLink) {
+      setInviteNotice("Ссылка ещё не готова.");
+      return;
+    }
     if (!navigator.share) {
       setInviteNotice("Поделиться можно через копирование ссылки.");
       return;
@@ -115,7 +134,7 @@ export function ProfilePage() {
       await navigator.share({
         title: "Devanta - подключение родителя",
         text: "Подключись к прогрессу ученика в Devanta",
-        url: actualInviteLink,
+        url: inviteLink,
       });
       setInviteNotice("Ссылка отправлена.");
     } catch {
@@ -123,29 +142,13 @@ export function ProfilePage() {
     }
   }
 
-  async function connectParent() {
-    if (!inviteLink) {
-      setInviteNotice("Сначала дождись генерации защищенной ссылки.");
-      return;
-    }
-    const token = new URL(inviteLink).searchParams.get("token") ?? "";
-    if (!token) {
-      setInviteNotice("В ссылке нет токена подключения.");
-      return;
-    }
-    if (!parentContact.trim()) {
-      setInviteNotice("Укажи email или контакт родителя.");
-      return;
-    }
-    setIsConnectingParent(true);
+  async function revokeParent(parentUserId: number) {
     try {
-      await api.get(`/parent/connect?token=${encodeURIComponent(token)}&parent=${encodeURIComponent(parentContact.trim())}`);
-      setInviteNotice("Родитель успешно подключен.");
-      setParentContact("");
+      await api.delete(`/parent/connections?parentUserId=${encodeURIComponent(String(parentUserId))}`);
+      setParentConnections((prev) => prev.filter((p) => p.parentUserId !== parentUserId));
+      setInviteNotice("Доступ для этого аккаунта родителя отключён.");
     } catch {
-      setInviteNotice("Не удалось подключить родителя.");
-    } finally {
-      setIsConnectingParent(false);
+      setInviteNotice("Не удалось отключить родителя.");
     }
   }
 
@@ -242,6 +245,10 @@ export function ProfilePage() {
                 </span>
                 <b>{xp}</b>
               </li>
+              <li className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span className="inline-flex items-center gap-2">🪙 Монеты Devanta</span>
+                <b>{summary?.coins ?? 0}</b>
+              </li>
             </ul>
           </article>
         </section>
@@ -290,7 +297,7 @@ export function ProfilePage() {
             <article className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm dark:border-blue-500/30 dark:bg-blue-500/5">
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Подключение родителей</h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Пригласи родителей, чтобы они могли отслеживать твой прогресс
+                Отправь ссылку родителю — ему нужен аккаунт «родитель»; по ссылке привязка к его логину и прогресс в ЛК.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -310,31 +317,43 @@ export function ProfilePage() {
                   Поделиться
                 </button>
               </div>
-              <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                {isInviteLoading ? "Генерирую защищенную ссылку..." : actualInviteLink}
+              <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs break-all text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                {isInviteLoading ? "Генерирую ссылку-приглашение..." : inviteLink || "Ссылка появится здесь после загрузки."}
               </div>
               {inviteNotice ? (
                 <p className="mt-2 text-sm font-medium text-brand-600 dark:text-brand-400">{inviteNotice}</p>
               ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  value={parentContact}
-                  onChange={(e) => setParentContact(e.target.value)}
-                  placeholder="Email родителя для принятия"
-                  className="min-w-[240px] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={connectParent}
-                  disabled={isConnectingParent}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                >
-                  {isConnectingParent ? "Подключаю..." : "Подтвердить подключение"}
-                </button>
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Подключённые родители</h3>
+                {isConnectionsLoading ? (
+                  <p className="mt-2 text-sm text-slate-500">Загрузка...</p>
+                ) : parentConnections.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Пока никто не подтвердил приглашение.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {parentConnections.map((p) => (
+                      <li
+                        key={p.parentUserId}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                      >
+                        <span className="text-slate-800 dark:text-slate-200">{p.parentEmail}</span>
+                        <button
+                          type="button"
+                          onClick={() => revokeParent(p.parentUserId)}
+                          className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                        >
+                          Отключить
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <div className="mt-4 inline-flex rounded-2xl bg-white p-3 shadow-sm dark:bg-slate-900">
-                <img src={qrImageUrl} alt="QR-код для подключения родителя" className="h-56 w-56 rounded-xl object-contain" />
-              </div>
+              {qrImageUrl ? (
+                <div className="mt-4 inline-flex rounded-2xl bg-white p-3 shadow-sm dark:bg-slate-900">
+                  <img src={qrImageUrl} alt="QR-код: ссылка для родителя" className="h-56 w-56 rounded-xl object-contain" />
+                </div>
+              ) : null}
             </article>
           </section>
         )}

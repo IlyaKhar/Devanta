@@ -32,7 +32,13 @@ func (h *QuizHandler) GetQuiz(c *fiber.Ctx) error {
 	if blockIndex <= 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid block index")
 	}
-	questions, qErr := h.loadQuestions(uint(moduleID), blockIndex)
+	lessonInBlock := c.QueryInt("lesson", 1)
+	if blockIndex >= 11 {
+		lessonInBlock = 1
+	} else if lessonInBlock < 1 || lessonInBlock > 3 {
+		return fiber.NewError(fiber.StatusBadRequest, "lesson must be 1..3")
+	}
+	questions, qErr := h.loadQuestions(uint(moduleID), blockIndex, lessonInBlock)
 	if qErr != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot load quiz")
 	}
@@ -48,7 +54,7 @@ func (h *QuizHandler) GetQuiz(c *fiber.Ctx) error {
 			Options:  opts,
 		})
 	}
-	return c.JSON(fiber.Map{"moduleId": moduleID, "blockIndex": blockIndex, "passThreshold": 70, "questions": items})
+	return c.JSON(fiber.Map{"moduleId": moduleID, "blockIndex": blockIndex, "lessonInBlock": lessonInBlock, "passThreshold": 70, "questions": items})
 }
 
 func (h *QuizHandler) Submit(c *fiber.Ctx) error {
@@ -70,8 +76,14 @@ func (h *QuizHandler) Submit(c *fiber.Ctx) error {
 	if blockIndex <= 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid block index")
 	}
+	lessonInBlock := c.QueryInt("lesson", 1)
+	if blockIndex >= 11 {
+		lessonInBlock = 1
+	} else if lessonInBlock < 1 || lessonInBlock > 3 {
+		return fiber.NewError(fiber.StatusBadRequest, "lesson must be 1..3")
+	}
 
-	questions, qErr := h.loadQuestions(uint(moduleID), blockIndex)
+	questions, qErr := h.loadQuestions(uint(moduleID), blockIndex, lessonInBlock)
 	if qErr != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot check quiz")
 	}
@@ -95,13 +107,21 @@ func (h *QuizHandler) Submit(c *fiber.Ctx) error {
 		xp = 80
 		_ = h.services.Gamification.AddXP(userID, "quiz_passed", xp)
 	}
-	_ = h.services.BlockQuizResultRepo.Upsert(userID, uint(moduleID), blockIndex, scorePercent, passed)
+	_ = h.services.BlockQuizResultRepo.Upsert(userID, uint(moduleID), blockIndex, lessonInBlock, scorePercent, passed)
+
+	if passed {
+		_ = h.services.UserRepo.TryGrantAchievement(userID, "quiz_first")
+		if n, err := h.services.BlockQuizResultRepo.CountPassedQuizzes(userID); err == nil && n >= 5 {
+			_ = h.services.UserRepo.TryGrantAchievement(userID, "quiz_veteran")
+		}
+	}
 
 	return c.JSON(fiber.Map{
-		"status":        "submitted",
-		"moduleId":      moduleID,
-		"blockIndex":    blockIndex,
-		"passed":        passed,
+		"status":         "submitted",
+		"moduleId":       moduleID,
+		"blockIndex":     blockIndex,
+		"lessonInBlock":  lessonInBlock,
+		"passed":         passed,
 		"scorePercent":  scorePercent,
 		"correct":       correct,
 		"total":         total,
@@ -110,26 +130,26 @@ func (h *QuizHandler) Submit(c *fiber.Ctx) error {
 	})
 }
 
-func (h *QuizHandler) loadQuestions(moduleID uint, blockIndex int) ([]models.QuizQuestion, error) {
-	rows, err := h.services.QuizRepo.ListByModuleID(moduleID)
+func (h *QuizHandler) loadQuestions(moduleID uint, blockIndex, lessonInBlock int) ([]models.QuizQuestion, error) {
+	rows, err := h.services.QuizRepo.ListByModuleBlockLesson(moduleID, blockIndex, lessonInBlock)
 	if err != nil {
 		return nil, err
 	}
 	if len(rows) > 0 {
 		return rows, nil
 	}
-	seed := fallbackQuiz(moduleID, blockIndex)
+	seed := fallbackQuiz(moduleID, blockIndex, lessonInBlock)
 	return seed, nil
 }
 
-func fallbackQuiz(moduleID uint, blockIndex int) []models.QuizQuestion {
-	baseID := int(moduleID)*1000 + blockIndex*100
+func fallbackQuiz(moduleID uint, blockIndex, lessonInBlock int) []models.QuizQuestion {
+	baseID := int(moduleID)*10000 + blockIndex*100 + lessonInBlock*10
 	return []models.QuizQuestion{
-		{ID: uint(baseID + 1), ModuleID: moduleID, Question: "Что такое переменная в программировании?", Options: `["Постоянное значение","Контейнер для хранения данных","Тип функции","Оператор сравнения"]`, CorrectIdx: 1},
-		{ID: uint(baseID + 2), ModuleID: moduleID, Question: "Какой цикл выполняется, пока условие истинно?", Options: `["for/while","switch","if","struct"]`, CorrectIdx: 0},
-		{ID: uint(baseID + 3), ModuleID: moduleID, Question: "Что такое функция?", Options: `["Блок кода для повторного использования","Тип переменной","Ошибка компиляции","Формат файла"]`, CorrectIdx: 0},
-		{ID: uint(baseID + 4), ModuleID: moduleID, Question: "Для чего нужны условия if/else?", Options: `["Для ветвления логики","Для хранения данных","Для рисования интерфейса","Для архивирования"]`, CorrectIdx: 0},
-		{ID: uint(baseID + 5), ModuleID: moduleID, Question: "Что такое массив?", Options: `["Один символ","Набор элементов одного типа","Сетевая ошибка","Команда терминала"]`, CorrectIdx: 1},
+		{ID: uint(baseID + 1), ModuleID: moduleID, BlockIndex: blockIndex, LessonInBlock: lessonInBlock, Question: "Что такое переменная в программировании?", Options: `["Постоянное значение","Контейнер для хранения данных","Тип функции","Оператор сравнения"]`, CorrectIdx: 1},
+		{ID: uint(baseID + 2), ModuleID: moduleID, BlockIndex: blockIndex, LessonInBlock: lessonInBlock, Question: "Какой цикл выполняется, пока условие истинно?", Options: `["for/while","switch","if","struct"]`, CorrectIdx: 0},
+		{ID: uint(baseID + 3), ModuleID: moduleID, BlockIndex: blockIndex, LessonInBlock: lessonInBlock, Question: "Что такое функция?", Options: `["Блок кода для повторного использования","Тип переменной","Ошибка компиляции","Формат файла"]`, CorrectIdx: 0},
+		{ID: uint(baseID + 4), ModuleID: moduleID, BlockIndex: blockIndex, LessonInBlock: lessonInBlock, Question: "Для чего нужны условия if/else?", Options: `["Для ветвления логики","Для хранения данных","Для рисования интерфейса","Для архивирования"]`, CorrectIdx: 0},
+		{ID: uint(baseID + 5), ModuleID: moduleID, BlockIndex: blockIndex, LessonInBlock: lessonInBlock, Question: "Что такое массив?", Options: `["Один символ","Набор элементов одного типа","Сетевая ошибка","Команда терминала"]`, CorrectIdx: 1},
 	}
 }
 

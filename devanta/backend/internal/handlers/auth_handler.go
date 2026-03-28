@@ -28,6 +28,20 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "registered"})
 }
 
+func (h *AuthHandler) RegisterParent(c *fiber.Ctx) error {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid payload")
+	}
+	if err := h.services.AuthService.RegisterParent(req.Email, req.Password); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.JSON(fiber.Map{"message": "registered"})
+}
+
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req struct {
 		Email    string `json:"email"`

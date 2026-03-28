@@ -11,12 +11,14 @@ type QuizQuestion = {
 type QuizPayload = {
   moduleId: number;
   blockIndex: number;
+  lessonInBlock: number;
   passThreshold: number;
   questions: QuizQuestion[];
 };
 
 type QuizResult = {
   blockIndex: number;
+  lessonInBlock?: number;
   passed: boolean;
   scorePercent: number;
   correct: number;
@@ -30,6 +32,7 @@ export function QuizPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const blockIndex = Number(new URLSearchParams(location.search).get("block") || "1");
+  const lessonInBlock = Number(new URLSearchParams(location.search).get("lesson") || "1");
   const [quiz, setQuiz] = useState<QuizPayload | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [index, setIndex] = useState(0);
@@ -42,7 +45,7 @@ export function QuizPage() {
     let cancelled = false;
     setIsLoading(true);
     api
-      .get<QuizPayload>(`/quiz/${moduleId}?block=${blockIndex}`)
+      .get<QuizPayload>(`/quiz/${moduleId}?block=${blockIndex}&lesson=${lessonInBlock}`)
       .then(({ data }) => {
         if (!cancelled) {
           setQuiz(data);
@@ -60,7 +63,7 @@ export function QuizPage() {
     return () => {
       cancelled = true;
     };
-  }, [moduleId, blockIndex]);
+  }, [moduleId, blockIndex, lessonInBlock]);
 
   const current = useMemo(() => quiz?.questions[index] ?? null, [quiz, index]);
   const progress = quiz ? Math.round(((index + 1) / quiz.questions.length) * 100) : 0;
@@ -73,7 +76,7 @@ export function QuizPage() {
     });
     setIsSubmitting(true);
     try {
-      const { data } = await api.post<QuizResult>(`/quiz/${moduleId}/submit?block=${blockIndex}`, { answers: payload });
+      const { data } = await api.post<QuizResult>(`/quiz/${moduleId}/submit?block=${blockIndex}&lesson=${lessonInBlock}`, { answers: payload });
       setResult(data);
     } finally {
       setIsSubmitting(false);
@@ -124,7 +127,10 @@ export function QuizPage() {
       <Link to={`/module/${moduleId}`} className="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">← Назад к модулю</Link>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="mb-2 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
-          <span className="font-semibold text-brand-500">Блок {quiz.blockIndex}</span>
+          <span className="font-semibold text-brand-500">
+            Блок {quiz.blockIndex}
+            {quiz.lessonInBlock ? ` · урок ${quiz.lessonInBlock}` : ""}
+          </span>
           <span>Вопрос {index + 1} из {quiz.questions.length}</span>
           <span className="font-semibold text-brand-500">{progress}%</span>
         </div>

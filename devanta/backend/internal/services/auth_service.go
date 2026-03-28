@@ -38,6 +38,20 @@ func (s *AuthService) Register(email, password string, age int) error {
 	})
 }
 
+// RegisterParent — только аккаунт родителя (без уроков/курсов).
+func (s *AuthService) RegisterParent(email, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.userRepo.Create(&models.User{
+		Email:    email,
+		Password: string(hash),
+		Role:     "parent",
+		Age:      0,
+	})
+}
+
 func (s *AuthService) Login(email, password string) (AuthTokens, error) {
 	user, err := s.userRepo.GetByEmail(email)
 	if err != nil {
@@ -49,6 +63,9 @@ func (s *AuthService) Login(email, password string) (AuthTokens, error) {
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
 		return AuthTokens{}, errors.New("invalid credentials")
+	}
+	if user.Blocked {
+		return AuthTokens{}, errors.New("account disabled")
 	}
 
 	accessToken, err := s.generateAccessToken(user.ID, user.Role)
@@ -79,9 +96,16 @@ func (s *AuthService) Refresh(refreshToken string) (string, error) {
 	if !ok {
 		return "", errors.New("invalid token payload")
 	}
-	role, _ := claims["role"].(string)
+	userID := uint(subFloat)
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return "", errors.New("invalid token")
+	}
+	if user.Blocked {
+		return "", errors.New("account disabled")
+	}
 
-	return s.generateAccessToken(uint(subFloat), role)
+	return s.generateAccessToken(userID, user.Role)
 }
 
 func (s *AuthService) generateAccessToken(userID uint, role string) (string, error) {

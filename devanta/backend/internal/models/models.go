@@ -17,6 +17,8 @@ type User struct {
 	EmailNotifications bool      `gorm:"default:true" json:"emailNotifications"`
 	PushNotifications  bool      `gorm:"default:true" json:"pushNotifications"`
 	Blocked            bool      `gorm:"default:false" json:"blocked"`
+	// Coins — внутриигровая валюта за задачи и спецчелленджи (начисление на бэкенде).
+	Coins              int       `gorm:"default:0" json:"coins"`
 	CreatedAt          time.Time `json:"createdAt"`
 }
 
@@ -42,17 +44,29 @@ type Lesson struct {
 }
 
 type Task struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	LessonID  uint      `json:"lessonId"`
-	Title     string    `json:"title"`
-	Type      string    `json:"type"`
-	Question  string    `json:"question"`
-	AnswerKey string    `json:"-"`
-	XPReward  int       `json:"xpReward"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	LessonID    uint      `json:"lessonId"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"` // basics | code | …
+	Question    string    `json:"question"`
+	AnswerKey   string    `json:"-"` // служебно / legacy
+	Language    string    `gorm:"default:'javascript'" json:"-"`
+	StarterCode string    `gorm:"type:text;default:''" json:"-"`
+	HintsJSON   string    `gorm:"type:text;column:hints_json;default:''" json:"-"`   // ["подсказка1",…]
+	ChecksJSON  string    `gorm:"type:text;column:checks_json;default:''" json:"-"` // ["f(1)===1",…] только на сервере
+	XPReward    int       `json:"xpReward"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // SpecialChallenge - ежедневные/недельные челленджи (витрина на странице «Задачи»).
+// UserChallengeClaim — пользователь один раз забрал награду за спецчеллендж по code.
+type UserChallengeClaim struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"uniqueIndex:uq_user_challenge_claim;not null" json:"userId"`
+	Code      string    `gorm:"size:64;uniqueIndex:uq_user_challenge_claim;not null" json:"code"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type SpecialChallenge struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Code        string    `gorm:"uniqueIndex;not null" json:"code"`
@@ -75,12 +89,14 @@ type FAQEntry struct {
 }
 
 type QuizQuestion struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	ModuleID   uint      `json:"moduleId"`
-	Question   string    `json:"question"`
-	Options    string    `json:"options"`
-	CorrectIdx int       `json:"-"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	ModuleID      uint      `json:"moduleId"`
+	BlockIndex    int       `gorm:"index;not null;default:1" json:"-"`    // блок 1..11
+	LessonInBlock int       `gorm:"index;not null;default:1" json:"-"`    // урок внутри блока 1..3 (в блоке 11 всегда 1)
+	Question      string    `json:"question"`
+	Options       string    `json:"options"`
+	CorrectIdx    int       `json:"-"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 type UserProgress struct {
@@ -143,20 +159,22 @@ type AILog struct {
 }
 
 type BlockQuizResult struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	UserID       uint      `gorm:"index:idx_block_quiz_unique,unique" json:"userId"`
-	ModuleID     uint      `gorm:"index:idx_block_quiz_unique,unique" json:"moduleId"`
-	BlockIndex   int       `gorm:"index:idx_block_quiz_unique,unique" json:"blockIndex"`
-	ScorePercent int       `json:"scorePercent"`
-	Passed       bool      `gorm:"default:false" json:"passed"`
-	Attempts     int       `gorm:"default:0" json:"attempts"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	UserID        uint      `gorm:"uniqueIndex:uq_block_quiz_slot" json:"userId"`
+	ModuleID      uint      `gorm:"uniqueIndex:uq_block_quiz_slot" json:"moduleId"`
+	BlockIndex    int       `gorm:"uniqueIndex:uq_block_quiz_slot" json:"blockIndex"`
+	LessonInBlock int       `gorm:"not null;default:1;uniqueIndex:uq_block_quiz_slot" json:"lessonInBlock"`
+	ScorePercent  int       `json:"scorePercent"`
+	Passed        bool      `gorm:"default:false" json:"passed"`
+	Attempts      int       `gorm:"default:0" json:"attempts"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// ParentConnection — связь ученик ↔ родитель (оба зарегистрированы; пара student+parent уникальна).
 type ParentConnection struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
-	StudentUserID uint      `gorm:"index:idx_parent_conn_unique,unique" json:"studentUserId"`
-	ParentContact string    `gorm:"index:idx_parent_conn_unique,unique" json:"parentContact"`
+	StudentUserID uint      `gorm:"not null;uniqueIndex:idx_parent_student_pair" json:"studentUserId"`
+	ParentUserID  uint      `gorm:"not null;uniqueIndex:idx_parent_student_pair" json:"parentUserId"`
 	CreatedAt     time.Time `json:"createdAt"`
 }

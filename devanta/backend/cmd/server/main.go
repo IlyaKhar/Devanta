@@ -16,6 +16,18 @@ func main() {
 	if err := database.EnsureUserSchema(db); err != nil {
 		log.Fatalf("user schema: %v", err)
 	}
+	if err := database.EnsureParentConnectionSchema(db); err != nil {
+		log.Fatalf("parent_connections schema: %v", err)
+	}
+	if err := database.EnsureTaskSchema(db); err != nil {
+		log.Fatalf("tasks schema: %v", err)
+	}
+	if err := database.EnsureQuizQuestionSchema(db); err != nil {
+		log.Fatalf("quiz_questions schema: %v", err)
+	}
+	if err := database.EnsureBlockQuizResultSchema(db); err != nil {
+		log.Fatalf("block_quiz_results schema: %v", err)
+	}
 	svc := services.NewContainer(cfg, db)
 
 	app := fiber.New(fiber.Config{BodyLimit: 8 * 1024 * 1024})

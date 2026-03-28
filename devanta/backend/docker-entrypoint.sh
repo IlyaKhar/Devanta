@@ -11,6 +11,14 @@ migrate)
 	shift
 	exec su-exec appuser /usr/local/bin/migrate "$@"
 	;;
+demo-complete)
+	shift
+	exec su-exec appuser /usr/local/bin/demo-complete "$@"
+	;;
+course-smoke)
+	shift
+	exec su-exec appuser /usr/local/bin/course-smoke "$@"
+	;;
 *)
 	exec su-exec appuser "$@"
 	;;

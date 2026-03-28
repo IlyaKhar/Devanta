@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthShell } from "../components/auth/AuthShell";
 import { api, getAxiosErrorMessage } from "../services/api";
 import { useAuthStore } from "../store/auth";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setToken = useAuthStore((s) => s.setToken);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +23,18 @@ export function LoginPage() {
         password,
       });
       setToken(data.accessToken);
-      navigate("/dashboard", { replace: true });
+      const next = searchParams.get("next");
+      const role = useAuthStore.getState().role;
+      const staff = role === "admin" || role === "moderator";
+      const dest =
+        next && next.startsWith("/") && !next.startsWith("//")
+          ? next
+          : role === "parent"
+            ? "/parent"
+            : staff
+              ? "/admin"
+              : "/dashboard";
+      navigate(dest, { replace: true });
     } catch (err: unknown) {
       setError(getAxiosErrorMessage(err, "Не удалось войти. Проверь email и пароль."));
     } finally {
@@ -85,7 +97,10 @@ export function LoginPage() {
 
         <p className="text-center text-sm text-slate-600">
           Нет аккаунта?{" "}
-          <Link to="/register" className="font-semibold text-brand-600 underline-offset-2 hover:underline">
+          <Link
+            to={searchParams.toString() ? `/register?${searchParams.toString()}` : "/register"}
+            className="font-semibold text-brand-600 underline-offset-2 hover:underline"
+          >
             Зарегистрироваться
           </Link>
         </p>

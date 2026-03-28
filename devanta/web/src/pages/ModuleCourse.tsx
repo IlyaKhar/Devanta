@@ -21,7 +21,30 @@ function CourseUiImg({ src, className = "h-4 w-4" }: { src: string; className?: 
   return <img src={src} alt="" width={16} height={16} className={`inline-block shrink-0 object-contain ${className}`} aria-hidden />;
 }
 
-type LessonItem = { id: number; title: string; duration: string; completed: boolean; status: string };
+type LessonItem = {
+  id: number;
+  title: string;
+  sortOrder?: number;
+  lessonInBlock?: number;
+  quizPassed?: boolean;
+  duration: string;
+  completed: boolean;
+  status: string;
+};
+
+/** Заголовок вида «Блок 3 · Тема — урок 2» → тема для шапки карточки блока */
+function blockTopicFromLessonTitle(title: string): { blockNum: number; topic: string } | null {
+  const m = title.match(/^Блок (\d+) · (.+) — урок \d+$/);
+  if (!m) return null;
+  return { blockNum: Number(m[1]), topic: m[2] };
+}
+
+/** Прогресс блока: до 50 за урок + до 50 за тест → макс. 100 на урок (знаменатель был *50, из‑за этого выходило 200%). */
+function blockProgressPercent(lessons: LessonItem[]): number {
+  const max = Math.max(lessons.length * 100, 1);
+  const earned = lessons.reduce((s, l) => s + (l.completed ? 50 : 0) + (l.quizPassed ? 50 : 0), 0);
+  return Math.min(100, Math.round((earned / max) * 100));
+}
 type ModuleCourseData = {
   id: number;
   title: string;
@@ -62,8 +85,11 @@ export function ModuleCoursePage() {
 
   const { lessonGroups, finalLesson } = useMemo(() => {
     if (!course) return { lessonGroups: [] as LessonItem[][], finalLesson: null as LessonItem | null };
-    const final = course.lessons.find((l) => l.title === "Итоговое занятие") ?? null;
-    const regularLessons = course.lessons.filter((l) => l.title !== "Итоговое занятие");
+    // Сортируем по порядку из БД; последний урок — финальный (раньше искали по строке «Итоговое занятие», в сиде другое название)
+    const sorted = [...course.lessons].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    if (sorted.length === 0) return { lessonGroups: [], finalLesson: null };
+    const final = sorted[sorted.length - 1] ?? null;
+    const regularLessons = sorted.slice(0, -1);
     const chunkSize = 3;
     const groups: LessonItem[][] = [];
     for (let i = 0; i < regularLessons.length; i += chunkSize) groups.push(regularLessons.slice(i, i + chunkSize));
@@ -128,11 +154,15 @@ export function ModuleCoursePage() {
         ) : null}
         {lessonGroups.map((lessons, index) => {
           const blockLocked = lessons.every((lesson) => lesson.status === "locked");
+          const blockPct = blockProgressPercent(lessons);
+          const firstTitle = lessons[0]?.title ?? "";
+          const parsed = blockTopicFromLessonTitle(firstTitle);
+          const blockHeading = parsed ? `${parsed.blockNum}. ${parsed.topic}` : `${index + 1}. Учебный блок`;
           return (
             <article key={index} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{index + 1}. Учебный блок</h3>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{blockHeading}</h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">В каждом уроке: видео → теория → тест → задание</p>
                   <p className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                     <span className="inline-flex items-center gap-1">
@@ -147,13 +177,11 @@ export function ModuleCoursePage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-4xl font-black text-brand-500">
-                    {Math.round((lessons.filter((x) => x.completed).length / Math.max(lessons.length, 1)) * 100)}%
-                  </p>
+                  <p className="text-4xl font-black text-brand-500">{blockPct}%</p>
                   <div className="mt-1 h-2 w-24 rounded-full bg-slate-200 dark:bg-slate-700">
                     <div
                       className="h-2 rounded-full bg-slate-900 dark:bg-white"
-                      style={{ width: `${Math.round((lessons.filter((x) => x.completed).length / Math.max(lessons.length, 1)) * 100)}%` }}
+                      style={{ width: `${blockPct}%` }}
                     />
                   </div>
                 </div>
@@ -169,37 +197,44 @@ export function ModuleCoursePage() {
                       <span>{lesson.duration}</span>
                     </div>
                   ) : (
-                    <Link
+                    <div
                       key={lesson.id}
-                      to={`/lesson/${lesson.id}`}
-                      className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2 text-sm dark:border-slate-800"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <Link
+                        to={`/lesson/${lesson.id}`}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-slate-700 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400"
+                      >
                         {lesson.status === "completed" ? (
-                          <CourseUiImg src={moduleCourseUi.lessonDone} className="h-4 w-4" />
+                          <CourseUiImg src={moduleCourseUi.lessonDone} className="h-4 w-4 shrink-0" />
                         ) : lesson.status === "in_progress" ? (
-                          <CourseUiImg src={moduleCourseUi.lessonInProgress} className="h-4 w-4" />
+                          <CourseUiImg src={moduleCourseUi.lessonInProgress} className="h-4 w-4 shrink-0" />
                         ) : (
-                          <CourseUiImg src={moduleCourseUi.lessonPlay} className="h-4 w-4" />
+                          <CourseUiImg src={moduleCourseUi.lessonPlay} className="h-4 w-4 shrink-0" />
                         )}
-                        {lesson.title}
-                      </span>
-                      <span className="text-slate-400">{lesson.duration}</span>
-                    </Link>
+                        <span className="min-w-0 truncate font-medium">{lesson.title}</span>
+                      </Link>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-slate-400">{lesson.duration}</span>
+                        {!blockLocked && lesson.lessonInBlock ? (
+                          <Link
+                            to={`/quiz/${course?.id ?? id}?block=${index + 1}&lesson=${lesson.lessonInBlock}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-brand-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-600"
+                          >
+                            <CourseUiImg src={moduleCourseUi.xpTrophy} className="h-3.5 w-3.5" />
+                            Тест
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
                   )
                 )}
                 {blockLocked ? (
                   <div className="mt-2 rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                    Тест заблокирован до прохождения предыдущего блока
+                    Блок закрыт: сдайте все три теста предыдущего блока
                   </div>
                 ) : (
-                  <Link
-                    to={`/quiz/${course?.id ?? id}?block=${index + 1}`}
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-brand-600"
-                  >
-                    <CourseUiImg src={moduleCourseUi.xpTrophy} className="h-5 w-5" />
-                    Пройти тест по блоку
-                  </Link>
+                  <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">У каждого урока свой тест — кнопка «Тест» справа от урока.</p>
                 )}
               </div>
             </article>
@@ -209,7 +244,7 @@ export function ModuleCoursePage() {
           <article className="rounded-2xl border border-brand-200 bg-brand-50/40 p-4 shadow-sm dark:border-brand-500/30 dark:bg-brand-500/10">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">11. Итоговое занятие</h3>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">11. {finalLesson.title}</h3>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                   Финальный блок откроется после прохождения блока 10.
                 </p>
@@ -253,7 +288,7 @@ export function ModuleCoursePage() {
                 </div>
               ) : (
                 <Link
-                  to={`/quiz/${course.id}?block=11`}
+                  to={`/quiz/${course.id}?block=11&lesson=1`}
                   className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-600"
                 >
                   <CourseUiImg src={moduleCourseUi.xpTrophy} className="h-5 w-5" />

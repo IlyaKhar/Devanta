@@ -1,13 +1,17 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
-	Port         string
-	AppEnv       string
-	DatabaseURL  string
-	JWTSecret    string
-	CORSOrigin   string
+	Port          string
+	AppEnv        string
+	DatabaseURL   string
+	JWTSecret     string
+	CORSOrigin    string
+	PublicAppURL  string // Публичный URL фронта для ссылки приглашения (если пусто — из запроса / CORS).
 }
 
 func Load() Config {
@@ -21,6 +25,7 @@ func Load() Config {
 			"CORS_ORIGIN",
 			"http://localhost,http://localhost:5173,http://127.0.0.1,http://127.0.0.1:5173",
 		),
+		PublicAppURL: strings.TrimSpace(envOrDefault("PUBLIC_APP_URL", "")),
 	}
 }
 

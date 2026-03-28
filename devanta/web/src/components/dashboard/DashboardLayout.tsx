@@ -4,6 +4,8 @@ import { mediaUrl } from "../../lib/mediaUrl";
 import { api } from "../../services/api";
 import { useAuthStore } from "../../store/auth";
 
+const staffRoles = new Set(["admin", "moderator"]);
+
 // UI из src/public/UI (Vite через import.meta.url)
 const ui = {
   sideMainA: new URL("../../public/UI/Sidebar/Active/MainLOGOA.png", import.meta.url).href,
@@ -40,7 +42,9 @@ export function DashboardLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const clearToken = useAuthStore((s) => s.logout);
+  const role = useAuthStore((s) => s.role);
   const [xp, setXp] = useState<number | null>(null);
+  const [coins, setCoins] = useState<number | null>(null);
   const [headerAvatarUrl, setHeaderAvatarUrl] = useState<string | null>(null);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -48,16 +52,18 @@ export function DashboardLayout() {
   useEffect(() => {
     let cancelled = false;
     api
-      .get<{ xp: number; avatarUrl?: string }>("/me/summary")
+      .get<{ xp: number; coins?: number; avatarUrl?: string }>("/me/summary")
       .then(({ data }) => {
         if (cancelled) return;
         setXp(data.xp);
+        setCoins(typeof data.coins === "number" ? data.coins : 0);
         const u = data.avatarUrl?.trim();
         setHeaderAvatarUrl(u && u.length > 0 ? u : null);
       })
       .catch(() => {
         if (!cancelled) {
           setXp(null);
+          setCoins(null);
           setHeaderAvatarUrl(null);
         }
       });
@@ -129,6 +135,18 @@ export function DashboardLayout() {
               </>
             )}
           </NavLink>
+          {staffRoles.has(role) ? (
+            <NavLink to="/admin" className={navClass}>
+              {({ isActive }) => (
+                <>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-bold" aria-hidden>
+                    A
+                  </span>
+                  Админка
+                </>
+              )}
+            </NavLink>
+          ) : null}
         </nav>
 
         <div className="mt-auto border-t border-slate-100 pt-4 dark:border-slate-800">
@@ -162,6 +180,10 @@ export function DashboardLayout() {
           <div className="flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
             <img src={ui.headerXp} alt="" width={20} height={20} className="h-5 w-5 object-contain" aria-hidden />
             {xp != null ? `${xp} XP` : "… XP"}
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
+            <span aria-hidden>🪙</span>
+            {coins != null ? coins : "…"}
           </div>
           <button
             type="button"

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
 
 type FaqCategoryResponse = {
@@ -123,8 +124,13 @@ export function AdminFaqPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <section>
-        <h1 className="text-3xl font-black text-slate-900 dark:text-white">Админка FAQ</h1>
-        <p className="mt-1 text-slate-500 dark:text-slate-400">Создание и редактирование вопросов для страницы FAQ.</p>
+        <p className="mb-2 text-sm">
+          <Link to="/admin" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            ← Админка
+          </Link>
+        </p>
+        <h1 className="text-3xl font-black text-slate-900 dark:text-white">FAQ</h1>
+        <p className="mt-1 text-slate-500 dark:text-slate-400">Создание и редактирование вопросов для публичной страницы.</p>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">

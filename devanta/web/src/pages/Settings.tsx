@@ -384,18 +384,6 @@ export function SettingsPage() {
             </button>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Двухфакторная аутентификация</h3>
-                <p className="text-slate-500 dark:text-neutral-400">Добавь дополнительный уровень защиты</p>
-              </div>
-              <button type="button" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-neutral-800 dark:text-neutral-100">
-                Настроить →
-              </button>
-            </div>
-          </article>
-
           <article className="rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm dark:border-red-500/30 dark:bg-red-500/5">
             <h3 className="flex items-center gap-2 text-3xl font-black text-red-600 dark:text-red-400">
               <SettingsUiImg src={settingsUi.deleteBtn} className="h-9 w-9" />

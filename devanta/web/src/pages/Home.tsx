@@ -189,6 +189,12 @@ export function HomePage() {
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
+              to="/parent/link"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Родителям
+            </Link>
+            <Link
               to="/login"
               className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:inline"
             >

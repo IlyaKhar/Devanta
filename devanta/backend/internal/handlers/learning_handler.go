@@ -1,11 +1,17 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
+	"time"
 
+	"devanta/backend/internal/models"
 	"devanta/backend/internal/services"
+	"devanta/backend/internal/services/codecheck"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 type LearningHandler struct {
@@ -18,6 +24,7 @@ type taskDTO struct {
 	Description string `json:"description"`
 	Category    string `json:"category"`
 	XP          int    `json:"xp"`
+	RewardCoins int    `json:"rewardCoins"` // монеты за первое успешное решение
 	Time        string `json:"time"`
 	Solves      int    `json:"solves"`
 	Difficulty  string `json:"difficulty"`
@@ -29,15 +36,20 @@ type specialChallengeDTO struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	RewardXP    int    `json:"rewardXp"`
+	RewardCoins int    `json:"rewardCoins"`
 	Duration    string `json:"duration"`
+	Completed   bool   `json:"completed"`
 }
 
 type moduleCourseLessonDTO struct {
-	ID        uint   `json:"id"`
-	Title     string `json:"title"`
-	Duration  string `json:"duration"`
-	Completed bool   `json:"completed"`
-	Status    string `json:"status"`
+	ID          uint   `json:"id"`
+	Title       string `json:"title"`
+	SortOrder   int    `json:"sortOrder"`
+	LessonSlot  int    `json:"lessonInBlock"` // 1..3 в обычном блоке; у итога — 1
+	Duration    string `json:"duration"`
+	Completed   bool   `json:"completed"`
+	QuizPassed  bool   `json:"quizPassed"`
+	Status      string `json:"status"`
 }
 
 type moduleCourseDTO struct {
@@ -55,6 +67,42 @@ type moduleCourseDTO struct {
 
 func NewLearningHandler(s *services.Container) *LearningHandler {
 	return &LearningHandler{services: s}
+}
+
+// coinsForTaskXP — бонус-монеты за задачу (первое решение).
+func coinsForTaskXP(xp int) int {
+	n := xp / 12
+	if n < 3 {
+		n = 3
+	}
+	if n > 80 {
+		n = 80
+	}
+	return n
+}
+
+// coinsForChallengeXP — монеты за спецчеллендж.
+func coinsForChallengeXP(xp int) int {
+	n := 12 + xp/8
+	if n < 18 {
+		n = 18
+	}
+	if n > 500 {
+		n = 500
+	}
+	return n
+}
+
+// Все три теста уроков предыдущего блока сданы — открываем следующий блок.
+func previousBlockAllLessonQuizzesPassed(slot map[int]map[int]bool, prevBlock int) bool {
+	if prevBlock < 1 {
+		return true
+	}
+	m := slot[prevBlock]
+	if m == nil {
+		return false
+	}
+	return m[1] && m[2] && m[3]
 }
 
 func (h *LearningHandler) GetModules(c *fiber.Ctx) error {
@@ -120,14 +168,8 @@ func (h *LearningHandler) GetTask(c *fiber.Ctx) error {
 	if repoErr != nil {
 		return fiber.NewError(fiber.StatusNotFound, "task not found")
 	}
-	return c.JSON(fiber.Map{
-		"id":       task.ID,
-		"lessonId": task.LessonID,
-		"title":    task.Title,
-		"type":     task.Type,
-		"question": task.Question,
-		"xpReward": task.XPReward,
-	})
+	userID, _ := c.Locals("userID").(uint)
+	return c.JSON(taskStudentResponse(h.services, task, userID))
 }
 
 func (h *LearningHandler) GetTaskByLesson(c *fiber.Ctx) error {
@@ -139,25 +181,13 @@ func (h *LearningHandler) GetTaskByLesson(c *fiber.Ctx) error {
 	if repoErr != nil {
 		return fiber.NewError(fiber.StatusNotFound, "lesson not found")
 	}
-	const lessonsPerBlock = 3
-	blockIndex := (lesson.SortOrder-1)/lessonsPerBlock + 1
-	firstSort := (blockIndex-1)*lessonsPerBlock + 1
-	firstLesson, firstErr := h.services.LessonRepo.GetByModuleIDAndSortOrder(lesson.ModuleID, firstSort)
-	if firstErr != nil {
-		return fiber.NewError(fiber.StatusNotFound, "task not found")
-	}
-	task, taskErr := h.services.TaskRepo.GetFirstByLessonID(firstLesson.ID)
+	// У каждого урока своя задача (раньше брали только первый урок блока).
+	task, taskErr := h.services.TaskRepo.GetFirstByLessonID(lesson.ID)
 	if taskErr != nil {
 		return fiber.NewError(fiber.StatusNotFound, "task not found")
 	}
-	return c.JSON(fiber.Map{
-		"id":       task.ID,
-		"lessonId": task.LessonID,
-		"title":    task.Title,
-		"type":     task.Type,
-		"question": task.Question,
-		"xpReward": task.XPReward,
-	})
+	userID, _ := c.Locals("userID").(uint)
+	return c.JSON(taskStudentResponse(h.services, task, userID))
 }
 
 func (h *LearningHandler) GetModuleCourse(c *fiber.Ctx) error {
@@ -177,10 +207,13 @@ func (h *LearningHandler) GetModuleCourse(c *fiber.Ctx) error {
 
 	userID, _ := c.Locals("userID").(uint)
 	statusMap := map[uint]string{}
-	passedBlockMap := map[int]bool{}
+	slotMap := map[int]map[int]bool{}
 	if userID > 0 {
 		statusMap, _ = h.services.LessonRepo.StatusesByUserAndModule(userID, module.ID)
-		passedBlockMap, _ = h.services.BlockQuizResultRepo.PassedMap(userID, module.ID)
+		slotMap, _ = h.services.BlockQuizResultRepo.PassedSlotMap(userID, module.ID)
+	}
+	if slotMap == nil {
+		slotMap = map[int]map[int]bool{}
 	}
 
 	progressPoints := 0
@@ -189,26 +222,39 @@ func (h *LearningHandler) GetModuleCourse(c *fiber.Ctx) error {
 	const lessonsPerBlock = 3
 	for _, lesson := range lessons {
 		blockIndex := (lesson.SortOrder-1)/lessonsPerBlock + 1
-		isUnlocked := blockIndex == 1 || passedBlockMap[blockIndex-1]
+		lessonInBlock := (lesson.SortOrder-1)%lessonsPerBlock + 1
+		isUnlocked := previousBlockAllLessonQuizzesPassed(slotMap, blockIndex-1)
 		status := statusMap[lesson.ID]
 		if status == "" {
 			status = "not_started"
 		}
+		quizPassed := false
+		if sm := slotMap[blockIndex]; sm != nil {
+			quizPassed = sm[lessonInBlock]
+		}
+		done := status == "completed"
 		if !isUnlocked {
 			status = "locked"
 		}
-		done := status == "completed"
-		if status == "completed" {
-			progressPoints += 100
-		} else if status == "in_progress" {
-			progressPoints += 50
+		// Прогресс: урок + отдельный вклад за тест этого урока (слот внутри блока).
+		if isUnlocked {
+			if done {
+				progressPoints += 100
+			} else if quizPassed {
+				progressPoints += 70
+			} else if status == "in_progress" {
+				progressPoints += 50
+			}
 		}
 		lessonItems = append(lessonItems, moduleCourseLessonDTO{
-			ID:        lesson.ID,
-			Title:     lesson.Title,
-			Duration:  estimateLessonDuration(lesson.SortOrder),
-			Completed: done,
-			Status:    status,
+			ID:         lesson.ID,
+			Title:      lesson.Title,
+			SortOrder:  lesson.SortOrder,
+			LessonSlot: lessonInBlock,
+			Duration:   estimateLessonDuration(lesson.SortOrder),
+			Completed:  done,
+			QuizPassed: quizPassed,
+			Status:     status,
 		})
 		totalXP += 50
 	}
@@ -234,27 +280,101 @@ func (h *LearningHandler) GetModuleCourse(c *fiber.Ctx) error {
 }
 
 func (h *LearningHandler) GetSpecialChallenges(c *fiber.Ctx) error {
+	userID, _ := c.Locals("userID").(uint)
 	rows, err := h.services.SpecialChallengeRepo.ListAll()
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "cannot load special challenges")
 	}
 	out := make([]specialChallengeDTO, 0, len(rows))
 	for _, row := range rows {
+		done := false
+		if userID > 0 {
+			done, _ = h.services.SpecialChallengeRepo.IsClaimed(userID, row.Code)
+		}
 		out = append(out, specialChallengeDTO{
 			ID:          row.Code,
 			Title:       row.Title,
 			Description: row.Description,
 			RewardXP:    row.RewardXP,
+			RewardCoins: coinsForChallengeXP(row.RewardXP),
 			Duration:    row.Duration,
+			Completed:   done,
 		})
 	}
 	return c.JSON(out)
+}
+
+// ClaimSpecialChallenge — один раз: XP + монеты (демо: без проверки кода, награда по кнопке).
+func (h *LearningHandler) ClaimSpecialChallenge(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uint)
+	if !ok || userID == 0 {
+		return fiber.NewError(fiber.StatusUnauthorized, "missing token")
+	}
+	code := strings.TrimSpace(c.Params("code"))
+	if code == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid code")
+	}
+	if claimed, _ := h.services.SpecialChallengeRepo.IsClaimed(userID, code); claimed {
+		u, _ := h.services.UserRepo.GetByID(userID)
+		bal := 0
+		if u != nil {
+			bal = u.Coins
+		}
+		return c.JSON(fiber.Map{
+			"ok": true, "already": true, "coinsEarned": 0, "coinsBalance": bal,
+		})
+	}
+	ch, err := h.services.SpecialChallengeRepo.GetByCode(code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, "challenge not found")
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, "cannot load challenge")
+	}
+	if err := h.services.SpecialChallengeRepo.CreateClaim(userID, code); err != nil {
+		if claimed, _ := h.services.SpecialChallengeRepo.IsClaimed(userID, code); claimed {
+			u, _ := h.services.UserRepo.GetByID(userID)
+			bal := 0
+			if u != nil {
+				bal = u.Coins
+			}
+			return c.JSON(fiber.Map{
+				"ok": true, "already": true, "coinsEarned": 0, "coinsBalance": bal,
+			})
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, "cannot claim")
+	}
+	coins := coinsForChallengeXP(ch.RewardXP)
+	_ = h.services.Gamification.AddXP(userID, "challenge_complete", ch.RewardXP)
+	_ = h.services.UserRepo.AddCoins(userID, coins)
+	u, _ := h.services.UserRepo.GetByID(userID)
+	bal := 0
+	if u != nil {
+		bal = u.Coins
+	}
+	return c.JSON(fiber.Map{
+		"ok": true, "already": false, "xp": ch.RewardXP, "coinsEarned": coins, "coinsBalance": bal,
+	})
 }
 
 func (h *LearningHandler) GetTasks(c *fiber.Ctx) error {
 	difficulty := strings.ToLower(c.Query("difficulty", "all"))
 	if difficulty != "all" && difficulty != "easy" && difficulty != "medium" && difficulty != "hard" {
 		return fiber.NewError(fiber.StatusBadRequest, "difficulty must be all|easy|medium|hard")
+	}
+	scope := strings.ToLower(strings.TrimSpace(c.Query("scope", "open")))
+	if scope != "open" && scope != "done" && scope != "all" {
+		return fiber.NewError(fiber.StatusBadRequest, "scope must be open|done|all")
+	}
+
+	userID, ok := c.Locals("userID").(uint)
+	if !ok || userID == 0 {
+		return fiber.NewError(fiber.StatusUnauthorized, "missing token")
+	}
+
+	completedLessons, _ := h.services.LessonRepo.CompletedLessonIDsForUser(userID)
+	if completedLessons == nil {
+		completedLessons = map[uint]struct{}{}
 	}
 
 	dbTasks, err := h.services.TaskRepo.ListAll()
@@ -268,6 +388,17 @@ func (h *LearningHandler) GetTasks(c *fiber.Ctx) error {
 		if difficulty != "all" && difficulty != diffCode {
 			continue
 		}
+		_, done := completedLessons[task.LessonID]
+		switch scope {
+		case "open":
+			if done {
+				continue
+			}
+		case "done":
+			if !done {
+				continue
+			}
+		}
 
 		items = append(items, taskDTO{
 			ID:          task.ID,
@@ -275,10 +406,11 @@ func (h *LearningHandler) GetTasks(c *fiber.Ctx) error {
 			Description: task.Question,
 			Category:    mapCategory(task.Type),
 			XP:          task.XPReward,
+			RewardCoins: coinsForTaskXP(task.XPReward),
 			Time:        mapTime(task.XPReward),
 			Solves:      mapSolves(task.ID),
 			Difficulty:  diffLabel,
-			Completed:   false,
+			Completed:   done,
 		})
 	}
 
@@ -300,10 +432,111 @@ func (h *LearningHandler) SubmitTask(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "task not found")
 	}
 
-	_ = h.services.Gamification.AddXP(userID, "task_complete", task.XPReward)
+	checks, parseErr := codecheck.ParseAssertionsJSON(task.ChecksJSON)
+	if parseErr != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "invalid task checks config")
+	}
+	if len(checks) > 0 {
+		var req struct {
+			Code string `json:"code"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, `нужен JSON {"code":"..."}`)
+		}
+		if err := codecheck.ValidateJavaScript(strings.TrimSpace(req.Code), checks, 4*time.Second); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"accepted": false,
+				"message":  err.Error(),
+			})
+		}
+	}
+
+	wasCompleted, _ := h.services.LessonRepo.IsLessonCompleted(userID, task.LessonID)
+	coinsEarned := 0
+	if !wasCompleted {
+		coinsEarned = coinsForTaskXP(task.XPReward)
+		_ = h.services.Gamification.AddXP(userID, "task_complete", task.XPReward)
+		_ = h.services.UserRepo.AddCoins(userID, coinsEarned)
+	}
+
+	// Ачивки не привязываем только к «первому закрытию урока»: иначе после demo-complete / course-smoke сабмит не выдавал бы награды.
+	_ = h.services.UserRepo.TryGrantAchievement(userID, "code_warrior")
+
 	_ = h.services.LessonRepo.UpsertUserProgress(userID, task.LessonID, "completed", 100)
 
-	return c.JSON(fiber.Map{"taskId": taskID, "status": "accepted", "xp": task.XPReward})
+	doneWithTasks, _ := h.services.LessonRepo.CountCompletedLessonsWithTask(userID)
+	if doneWithTasks >= 10 {
+		_ = h.services.UserRepo.TryGrantAchievement(userID, "task_marathon")
+	}
+	if task.Title == "Финальная задача" {
+		lesson, lerr := h.services.LessonRepo.GetByID(task.LessonID)
+		if lerr == nil {
+			mod, merr := h.services.ModuleRepo.GetByID(lesson.ModuleID)
+			if merr == nil {
+				switch {
+				case strings.Contains(mod.Title, "JavaScript"):
+					_ = h.services.UserRepo.TryGrantAchievement(userID, "grad_js")
+				case strings.Contains(mod.Title, "Python"):
+					_ = h.services.UserRepo.TryGrantAchievement(userID, "grad_py")
+				case strings.Contains(mod.Title, "Веб"):
+					_ = h.services.UserRepo.TryGrantAchievement(userID, "grad_web")
+				}
+			}
+		}
+	}
+
+	u, _ := h.services.UserRepo.GetByID(userID)
+	bal := 0
+	if u != nil {
+		bal = u.Coins
+	}
+	return c.JSON(fiber.Map{
+		"accepted":      true,
+		"taskId":        taskID,
+		"status":        "accepted",
+		"xp":            task.XPReward,
+		"xpGranted":     !wasCompleted,
+		"coinsEarned":   coinsEarned,
+		"coinsBalance":  bal,
+		"firstSolve":    !wasCompleted,
+	})
+}
+
+func taskStudentResponse(svc *services.Container, task *models.Task, userID uint) fiber.Map {
+	m := taskStudentJSON(task)
+	m["coinsOnFirstSolve"] = coinsForTaskXP(task.XPReward)
+	if userID > 0 {
+		done, _ := svc.LessonRepo.IsLessonCompleted(userID, task.LessonID)
+		m["lessonCompleted"] = done
+	} else {
+		m["lessonCompleted"] = false
+	}
+	return m
+}
+
+// taskStudentJSON — ответ GET задачи: без checks_json и answer_key.
+func taskStudentJSON(task *models.Task) fiber.Map {
+	lang := strings.TrimSpace(task.Language)
+	if lang == "" {
+		lang = "javascript"
+	}
+	var hints []string
+	if strings.TrimSpace(task.HintsJSON) != "" {
+		_ = json.Unmarshal([]byte(task.HintsJSON), &hints)
+	}
+	checks, _ := codecheck.ParseAssertionsJSON(task.ChecksJSON)
+	return fiber.Map{
+		"id":              task.ID,
+		"lessonId":        task.LessonID,
+		"title":           task.Title,
+		"type":            task.Type,
+		"question":        task.Question,
+		"xpReward":        task.XPReward,
+		"language":        lang,
+		"starterCode":     task.StarterCode,
+		"hints":           hints,
+		"needsCodeCheck": len(checks) > 0,
+	}
 }
 
 func mapDifficulty(xp int) (string, string) {

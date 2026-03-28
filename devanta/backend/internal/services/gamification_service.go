@@ -50,3 +50,12 @@ func (s *GamificationService) WeeklyXPByUser(userID uint) (int, error) {
 		Scan(&row).Error
 	return row.Total, err
 }
+
+// CountEventsBySource — число событий XP с данным source (например task_complete для «10 задач»).
+func (s *GamificationService) CountEventsBySource(userID uint, source string) (int64, error) {
+	var n int64
+	err := s.db.Model(&models.XPEvent{}).
+		Where("user_id = ? AND source = ?", userID, source).
+		Count(&n).Error
+	return n, err
+}
